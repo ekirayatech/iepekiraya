@@ -523,7 +523,7 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-[#334155] mb-1">
-                      Curso / Grado (Tabla_Cursos_Anios) *
+                      Curso / Grado Escolar *
                     </label>
                     <select
                       value={formData.curso}
@@ -587,7 +587,7 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
 
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-[#334155] mb-1">
-                      Categoría SIMAT / Necesidad o Desempeño Superior (Tabla_Categorias_SIMAT) *
+                      Categoría SIMAT / Necesidad o Desempeño Superior *
                     </label>
                     <select
                       value={formData.categoriaSimat}
@@ -620,43 +620,50 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E8F0] pb-2">
                   <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2">
                     <Lock className="w-4 h-4 text-teal-700" />
-                    Diagnóstico / Caracterización Clínica y Descripción Pedagógica DUA
+                    {roleProfile.canEditClinicalDiagnosis
+                      ? 'Diagnóstico / Caracterización Clínica y Descripción Pedagógica DUA'
+                      : 'Caracterización Pedagógica DUA y Barreras del Contexto'}
                   </h3>
                   <span className="text-[11px] font-mono-code px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
-                    Cifrado en Google Sheets: AES-256-GCM
+                    {roleProfile.canManageSheetsConfig
+                      ? 'Cifrado en Google Sheets: AES-256-GCM'
+                      : 'Protección Ley 1581: AES-256-GCM'}
                   </span>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-[#334155]">
-                      Diagnóstico o Concepto de Excepcionalidad (Protegido por Ley 1581 de 2012) *
-                    </label>
-                    {!roleProfile.canEditClinicalDiagnosis && (
-                      <span className="text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded font-medium">
-                        Solo lectura para Rol Profesor (Editable por Psicología y Admin)
-                      </span>
+                {roleProfile.canEditClinicalDiagnosis ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-[#334155]">
+                        Diagnóstico o Concepto de Excepcionalidad (Protegido por Ley 1581 de 2012) *
+                      </label>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={formData.diagnostico}
+                      onChange={(e) =>
+                        setFormData({ ...formData, diagnostico: e.target.value })
+                      }
+                      placeholder="Ingresa el diagnóstico clínico (CIE-11/DSM-5) o la valoración psicopedagógica de Capacidades/Talentos Excepcionales..."
+                      className="w-full p-3 rounded-lg border border-[#CBD5E1] bg-white text-sm text-[#0F172A]"
+                    />
+                    {roleProfile.canManageSheetsConfig && (
+                      <div className="mt-1.5 text-[11px] font-mono-code text-slate-500 truncate">
+                        Vista previa celda cifrada en Google Sheets:{' '}
+                        <span className="text-teal-800">
+                          {formatEncryptedPreview(formData.diagnostico, formData.id)}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <textarea
-                    rows={3}
-                    readOnly={!roleProfile.canEditClinicalDiagnosis}
-                    value={formData.diagnostico}
-                    onChange={(e) => setFormData({ ...formData, diagnostico: e.target.value })}
-                    placeholder="Ingresa el diagnóstico clínico (CIE-11/DSM-5) o la valoración psicopedagógica de Capacidades/Talentos Excepcionales..."
-                    className={`w-full p-3 rounded-lg border text-sm ${
-                      roleProfile.canEditClinicalDiagnosis
-                        ? 'border-[#CBD5E1] bg-white text-[#0F172A]'
-                        : 'border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed'
-                    }`}
-                  />
-                  <div className="mt-1.5 text-[11px] font-mono-code text-slate-500 truncate">
-                    Vista previa celda cifrada en Google Sheets:{' '}
-                    <span className="text-teal-800">
-                      {formatEncryptedPreview(formData.diagnostico, formData.id)}
+                ) : (
+                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-[#475569] flex items-center gap-2.5">
+                    <Lock className="w-4 h-4 text-teal-700 shrink-0" />
+                    <span>
+                      <strong>Diagnóstico Clínico Reservado (Ley 1581 de 2012):</strong> La información clínica detallada se encuentra protegida. Consulta y actualiza la Descripción Pedagógica DUA y las adecuaciones curriculares.
                     </span>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-[#334155] mb-1">
@@ -1190,12 +1197,14 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
             </div>
           )}
 
-          {/* Pie de Modal con Guardado y Sincronización en Tiempo Real */}
+          {/* Pie de Modal con Guardado */}
           <div className="bg-white border-t border-[#E2E8F0] pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-[#475569]">
               <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" />
               <span>
-                Al guardar, se cifra el diagnóstico (AES-256) y se propaga en el ciclo de 2 segundos a Google Sheets.
+                {roleProfile.canManageSheetsConfig
+                  ? 'Al guardar, se cifra el diagnóstico (AES-256) y se propaga en el ciclo de 2 segundos a Google Sheets.'
+                  : 'Al guardar, se actualiza el expediente institucional PIAR con protección Ley 1581 de 2012.'}
               </span>
             </div>
 
@@ -1212,7 +1221,9 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#0F766E] hover:bg-[#115E59] text-white text-xs sm:text-sm font-semibold shadow-sm transition cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                Guardar Expediente PIAR y Sincronizar
+                {roleProfile.canManageSheetsConfig
+                  ? 'Guardar Expediente PIAR y Sincronizar'
+                  : 'Guardar Expediente PIAR'}
               </button>
             </div>
           </div>

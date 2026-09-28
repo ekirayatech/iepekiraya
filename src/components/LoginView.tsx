@@ -131,7 +131,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     if (!matchedUser) {
       setErrorMsg(
-        'Credenciales no válidas o usuario inactivo en la hoja Usuarios_Perfiles. Verifica tu correo/usuario y contraseña.'
+        'Credenciales institucionales no válidas o usuario inactivo. Verifica tu correo/usuario y contraseña.'
       );
       return;
     }
@@ -462,44 +462,53 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   Ingreso Institucional PIAR & DUA
                 </h1>
                 <p className="text-xs text-[#64748B] mt-0.5">
-                  Autenticación validada contra la pestaña <code className="font-mono-code text-teal-800">Usuarios_Perfiles</code>
+                  {isAdmin ? (
+                    <>
+                      Autenticación validada contra la pestaña{' '}
+                      <code className="font-mono-code text-teal-800">Usuarios_Perfiles</code>
+                    </>
+                  ) : (
+                    'Plataforma Institucional de Educación Inclusiva • Decreto 1421 MEN'
+                  )}
                 </p>
               </div>
             </div>
 
-            {/* Pestañas Login vs Crear Usuario en Hoja */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#F4F4F0] border border-[#CBD5E1]">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRegisterMode(false);
-                  setErrorMsg(null);
-                }}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  !isRegisterMode
-                    ? 'bg-[#0F766E] text-white shadow-2xs'
-                    : 'text-[#475569] hover:text-[#0F172A]'
-                }`}
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                Iniciar Sesión
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRegisterMode(true);
-                  setErrorMsg(null);
-                }}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  isRegisterMode
-                    ? 'bg-[#0F766E] text-white shadow-2xs'
-                    : 'text-[#475569] hover:text-[#0F172A]'
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                Registrar en Usuarios_Perfiles
-              </button>
-            </div>
+            {/* Pestañas Login vs Crear Usuario en Hoja — Exclusivo Administrador */}
+            {isAdmin && (
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#F4F4F0] border border-[#CBD5E1]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegisterMode(false);
+                    setErrorMsg(null);
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    !isRegisterMode
+                      ? 'bg-[#0F766E] text-white shadow-2xs'
+                      : 'text-[#475569] hover:text-[#0F172A]'
+                  }`}
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  Iniciar Sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegisterMode(true);
+                    setErrorMsg(null);
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    isRegisterMode
+                      ? 'bg-[#0F766E] text-white shadow-2xs'
+                      : 'text-[#475569] hover:text-[#0F172A]'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Registrar en Usuarios_Perfiles
+                </button>
+              </div>
+            )}
 
             {errorMsg && (
               <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2">
@@ -508,7 +517,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
             )}
 
-            {!isRegisterMode ? (
+            {!isRegisterMode || !isAdmin ? (
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-[#334155] mb-1.5">

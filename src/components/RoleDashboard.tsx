@@ -478,7 +478,7 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
 
             <div className="p-3.5 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950">
               <div className="font-semibold mb-1">Protección Clínica Ley 1581 de 2012</div>
-              Cuando el perfil cambia a <strong>Profesor</strong>, el diagnóstico clínico detallado se protege para priorizar la caracterización pedagógica y las adecuaciones DUA en el aula.
+              Los diagnósticos clínicos y valoraciones psicopedagógicas registrados bajo tu perfil cuentan con reserva legal y cifrado de seguridad conforme a la Ley 1581 de 2012 y el Decreto 1421 de 2017.
             </div>
           </div>
         </div>

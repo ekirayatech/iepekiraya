@@ -66,19 +66,17 @@ export const AuditPdfModal: React.FC<AuditPdfModalProps> = ({
   const [nombreProfesional, setNombreProfesional] = useState(
     student.firmaProfesional?.nombreProfesional ||
       preloadedSig?.nombreProfesional ||
-      (roleProfile.canSignAuditReport
-        ? roleProfile.userName
-        : 'Dra. Valentina Morales Pineda')
+      roleProfile.userName
   );
   const [cargo, setCargo] = useState(
     student.firmaProfesional?.cargo ||
       preloadedSig?.cargo ||
-      'Psicóloga Orientadora Escolar — Líder de Inclusión (Decreto 1421)'
+      roleProfile.subtitle
   );
   const [tarjetaProfesional, setTarjetaProfesional] = useState(
     student.firmaProfesional?.tarjetaProfesional ||
       preloadedSig?.tarjetaProfesional ||
-      'T.P. 148920 COLPSIC'
+      'Registro Institucional MEN'
   );
   const [institucion, setInstitucion] = useState(
     student.firmaProfesional?.institucion ||
@@ -731,7 +729,11 @@ export const AuditPdfModal: React.FC<AuditPdfModalProps> = ({
                         Cifrado en Base de Datos: AES-256-GCM
                       </span>
                     </div>
-                    <p className="text-[#334155] leading-relaxed">{student.diagnostico}</p>
+                    <p className="text-[#334155] leading-relaxed">
+                      {roleProfile.canEditClinicalDiagnosis
+                        ? student.diagnostico
+                        : 'Información clínica reservada conforme a la Ley 1581 de 2012 — Consultar caracterización pedagógica y ajustes DUA.'}
+                    </p>
                   </div>
 
                   <div className="border border-[#CBD5E1] rounded-lg p-3">

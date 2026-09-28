@@ -305,7 +305,7 @@ export const AdjustmentBankView: React.FC<AdjustmentBankViewProps> = ({
               type="submit"
               className="px-5 py-2 rounded-lg bg-[#0F766E] hover:bg-[#115E59] text-white text-xs font-semibold cursor-pointer"
             >
-              Guardar en Banco y Sincronizar con Google Sheets
+              Guardar Estrategia en el Banco DUA
             </button>
           </div>
         </form>
