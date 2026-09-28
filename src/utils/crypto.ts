@@ -8,8 +8,12 @@
 const DEFAULT_INSTITUTIONAL_SECRET = 'EKIRAYA-IEP-MEN-1421-COLOMBIA-2026-KEY';
 const SALT_STRING = 'EKIRAYA_SALT_V1_2026';
 
-function strToUint8(str: string): Uint8Array {
-  return new TextEncoder().encode(str);
+function strToUint8(str: string): Uint8Array<ArrayBuffer> {
+  const encoded = new TextEncoder().encode(str);
+  const buffer = new ArrayBuffer(encoded.byteLength);
+  const view = new Uint8Array(buffer);
+  view.set(encoded);
+  return view;
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -20,9 +24,10 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToUint8(base64: string): Uint8Array {
+function base64ToUint8(base64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }

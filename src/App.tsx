@@ -19,20 +19,30 @@ import {
   RefreshCw,
   Calendar,
   Trash2,
+  Layers,
+  Upload,
+  FileDown,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   AjusteRazonableItem,
   AuditLogEntry,
+  CategoriaSimatCatalogItem,
+  CursoAnioCatalogItem,
   FirmaProfesional,
+  PreloadedSignatureConfig,
   StudentPIAR,
   SyncStatus,
   UserRole,
 } from './types/piar';
 import {
+  ANIOS_LECTIVOS_COLOMBIA,
   BANCO_AJUSTES_INICIAL,
   CURSOS_COLOMBIA,
   INITIAL_STUDENTS_PIAR,
   ROLE_PROFILES,
+  TABLA_CATEGORIAS_SIMAT_INICIAL,
+  TABLA_CURSOS_ANIOS_INICIAL,
 } from './data/colombianLegislationAndSeed';
 import {
   createEkirayaSpreadsheet,
@@ -41,8 +51,14 @@ import {
   pushAllDataToSpreadsheet,
 } from './services/googleSheetsService';
 import {
+  EKIRAYA_LOGO_LOCAL_FALLBACK,
+  EKIRAYA_LOGO_URL,
   exportDetailedExcelWorkbook,
+  exportOfficialPiarPdf,
   exportSubjectAdaptationsCsv,
+  getPreloadedSignature,
+  processUploadedSignatureFileToPng,
+  savePreloadedSignature,
 } from './utils/exportUtils';
 import { generateAuditHash } from './utils/crypto';
 import { RoleDashboard } from './components/RoleDashboard';
@@ -51,10 +67,26 @@ import { AuditPdfModal } from './components/AuditPdfModal';
 import { AdjustmentBankView } from './components/AdjustmentBankView';
 import { SheetsSyncModal } from './components/SheetsSyncModal';
 import { LegislationGuideView } from './components/LegislationGuideView';
+import { CatalogTablesView } from './components/CatalogTablesView';
+
+const firebaseConfigModules = import.meta.glob<{ oAuthClientId?: string }>(
+  '../firebase-applet-config.json',
+  { eager: true, import: 'default' }
+);
+const firebaseAppletConfig =
+  Object.values(firebaseConfigModules)[0] || {
+    oAuthClientId: '995821229747-42oilhngiqduavvq12rt7g8g6k1hujmu.apps.googleusercontent.com',
+  };
 
 const STORAGE_STUDENTS_KEY = 'ekiraya_iep_students_v1';
 const STORAGE_BANK_KEY = 'ekiraya_iep_bank_v1';
+const STORAGE_CURSOS_KEY = 'ekiraya_iep_cursos_v1';
+const STORAGE_CATEGORIAS_KEY = 'ekiraya_iep_categorias_v1';
 const STORAGE_SHEET_META_KEY = 'ekiraya_iep_sheet_meta_v1';
+const DEFAULT_OAUTH_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  firebaseAppletConfig.oAuthClientId ||
+  '995821229747-42oilhngiqduavvq12rt7g8g6k1hujmu.apps.googleusercontent.com';
 
 export default function App() {
   // Rol de usuario activo: Administrador, Psicóloga o Profesor
@@ -63,7 +95,7 @@ export default function App() {
 
   // Navegación principal
   const [activeView, setActiveView] = useState<
-    'panel' | 'estudiantes' | 'banco' | 'historial' | 'normativa'
+    'panel' | 'estudiantes' | 'banco' | 'catalogos' | 'historial' | 'normativa'
   >('panel');
 
   // Base de datos de Estudiantes PIAR y Banco de Ajustes
@@ -92,6 +124,35 @@ export default function App() {
     }
     return BANCO_AJUSTES_INICIAL;
   });
+
+  // Tablas Maestras: Cursos / Años Lectivos (2026-2027, etc.) y Categorías SIMAT
+  const [cursosCatalog, setCursosCatalog] = useState<CursoAnioCatalogItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_CURSOS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return TABLA_CURSOS_ANIOS_INICIAL;
+  });
+
+  const [categoriasCatalog, setCategoriasCatalog] = useState<CategoriaSimatCatalogItem[]>(
+    () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_CATEGORIAS_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {
+        // fallback
+      }
+      return TABLA_CATEGORIAS_SIMAT_INICIAL;
+    }
+  );
 
   // Estado de OAuth y Google Sheets
   const [accessToken, setAccessToken] = useState<string | null>(() =>
@@ -179,6 +240,10 @@ export default function App() {
 
   const [auditPdfStudent, setAuditPdfStudent] = useState<StudentPIAR | null>(null);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
+  const [preloadedSignature, setPreloadedSignature] =
+    useState<PreloadedSignatureConfig | null>(() => getPreloadedSignature());
+  const [sigBannerMsg, setSigBannerMsg] = useState<string | null>(null);
+  const globalSigInputRef = useRef<HTMLInputElement | null>(null);
 
   // Filtros del Directorio de Estudiantes
   const [searchStudent, setSearchStudent] = useState('');
@@ -191,7 +256,11 @@ export default function App() {
   studentsRef.current = students;
   const bankRef = useRef(adjustmentBank);
   bankRef.current = adjustmentBank;
-  const isDirtyForSheetsRef = useRef(false);
+  const cursosRef = useRef(cursosCatalog);
+  cursosRef.current = cursosCatalog;
+  const categoriasRef = useRef(categoriasCatalog);
+  categoriasRef.current = categoriasCatalog;
+  const isDirtyForSheetsRef = useRef(true);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   const appendAuditLog = useCallback(
@@ -280,19 +349,32 @@ export default function App() {
         try {
           if (isDirtyForSheetsRef.current) {
             isDirtyForSheetsRef.current = false;
-            await pushAllDataToSpreadsheet(
-              accessToken,
-              syncStatus.spreadsheetId,
-              studentsRef.current,
-              bankRef.current,
-              encryptionKey
-            );
+              await pushAllDataToSpreadsheet(
+                accessToken,
+                syncStatus.spreadsheetId,
+                studentsRef.current,
+                bankRef.current,
+                encryptionKey,
+                cursosRef.current,
+                categoriasRef.current
+              );
           } else if (!editorModalState.isOpen) {
             const remote = await pullDataFromSpreadsheet(
               accessToken,
               syncStatus.spreadsheetId,
               encryptionKey
             );
+            if (remote.cursosCatalog && remote.cursosCatalog.length > 0) {
+              setCursosCatalog(remote.cursosCatalog);
+              localStorage.setItem(STORAGE_CURSOS_KEY, JSON.stringify(remote.cursosCatalog));
+            }
+            if (remote.categoriasCatalog && remote.categoriasCatalog.length > 0) {
+              setCategoriasCatalog(remote.categoriasCatalog);
+              localStorage.setItem(
+                STORAGE_CATEGORIAS_KEY,
+                JSON.stringify(remote.categoriasCatalog)
+              );
+            }
             if (remote.students && remote.students.length > 0) {
               // Merge inteligente por updatedAt para trabajo simultáneo de múltiples usuarios
               const mergedMap = new Map<string, StudentPIAR>();
@@ -337,13 +419,13 @@ export default function App() {
   }, [accessToken, syncStatus.spreadsheetId, encryptionKey, editorModalState.isOpen]);
 
   // Autenticación OAuth 2.0 con Google Identity Services (Client-Side)
-  const handleConnectGoogleOAuth = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const handleConnectGoogleOAuth = (autoCreateSheetAfterAuth: boolean = true) => {
+    const clientId = DEFAULT_OAUTH_CLIENT_ID;
     if (!window.google?.accounts?.oauth2 || !clientId) {
       setSyncStatus((prev) => ({
         ...prev,
         lastError:
-          'El cliente OAuth de Google se está inicializando o requiere configurar VITE_GOOGLE_CLIENT_ID.',
+          'El cliente OAuth de Google se está inicializando. Por favor intenta de nuevo en unos segundos.',
       }));
       return;
     }
@@ -362,6 +444,46 @@ export default function App() {
             lastError: null,
           }));
           appendAuditLog('Conexión OAuth 2.0 establecida con Google Sheets API');
+
+          if (autoCreateSheetAfterAuth && !syncStatus.spreadsheetId) {
+            try {
+              const created = await createEkirayaSpreadsheet(
+                token,
+                studentsRef.current,
+                bankRef.current,
+                encryptionKey,
+                cursosRef.current,
+                categoriasRef.current
+              );
+              localStorage.setItem(
+                STORAGE_SHEET_META_KEY,
+                JSON.stringify({
+                  id: created.spreadsheetId,
+                  url: created.spreadsheetUrl,
+                  title: created.title,
+                })
+              );
+              setSyncStatus((prev) => ({
+                ...prev,
+                isConnectedToGoogle: true,
+                spreadsheetId: created.spreadsheetId,
+                spreadsheetUrl: created.spreadsheetUrl,
+                spreadsheetTitle: created.title,
+                lastError: null,
+              }));
+              appendAuditLog(
+                `Hoja de cálculo creada en Google Drive (${created.spreadsheetId})`
+              );
+            } catch (err) {
+              setSyncStatus((prev) => ({
+                ...prev,
+                lastError:
+                  err instanceof Error
+                    ? err.message
+                    : 'Autenticado, pero ocurrió un error al crear la hoja automáticamente.',
+              }));
+            }
+          }
         }
       },
     });
@@ -372,7 +494,7 @@ export default function App() {
   // Crear nueva Hoja de Cálculo Google Sheets con las 5 pestañas de Ekirayá IEP
   const handleCreateNewGoogleSheet = async () => {
     if (!accessToken) {
-      handleConnectGoogleOAuth();
+      handleConnectGoogleOAuth(true);
       return;
     }
     try {
@@ -380,7 +502,9 @@ export default function App() {
         accessToken,
         students,
         adjustmentBank,
-        encryptionKey
+        encryptionKey,
+        cursosCatalog,
+        categoriasCatalog
       );
       localStorage.setItem(
         STORAGE_SHEET_META_KEY,
@@ -445,7 +569,9 @@ export default function App() {
             extractedId,
             students,
             adjustmentBank,
-            encryptionKey
+            encryptionKey,
+            cursosCatalog,
+            categoriasCatalog
           );
         }
         appendAuditLog(`Vinculado y sincronizado Google Sheet ID: ${extractedId}`);
@@ -475,7 +601,9 @@ export default function App() {
           syncStatus.spreadsheetId,
           students,
           adjustmentBank,
-          encryptionKey
+          encryptionKey,
+          cursosCatalog,
+          categoriasCatalog
         );
       } catch {
         // handled in status
@@ -519,6 +647,7 @@ export default function App() {
 
   // Guardar Firma Digital en Informe PDF de Auditoría
   const handleSaveSignature = (studentId: string, firma: FirmaProfesional) => {
+    setPreloadedSignature(getPreloadedSignature());
     setStudents((prev) => {
       const next = prev.map((st) =>
         st.id === studentId
@@ -542,6 +671,46 @@ export default function App() {
     );
   };
 
+  // Cargar archivo .PNG de firma previamente desde la barra superior
+  const handleGlobalPngUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const pngDataUrl = await processUploadedSignatureFileToPng(file);
+      const newConfig: PreloadedSignatureConfig = {
+        firmaPngDataUrl: pngDataUrl,
+        fileName: file.name,
+        nombreProfesional:
+          preloadedSignature?.nombreProfesional ||
+          (roleProfile.canSignAuditReport
+            ? roleProfile.userName
+            : 'Dra. Valentina Morales Pineda'),
+        cargo:
+          preloadedSignature?.cargo ||
+          'Psicóloga Orientadora Escolar — Líder de Inclusión (Decreto 1421)',
+        tarjetaProfesional:
+          preloadedSignature?.tarjetaProfesional || 'T.P. 148920 COLPSIC',
+        institucion:
+          preloadedSignature?.institucion ||
+          'Institución Educativa Ekirayá — Aprobación Oficial MEN',
+        updatedAt: new Date().toISOString(),
+      };
+      savePreloadedSignature(newConfig);
+      setPreloadedSignature(newConfig);
+      setSigBannerMsg(
+        `Firma "${file.name}" cargada previamente en formato .PNG y lista para exportar en todos los PDFs Oficiales.`
+      );
+      setTimeout(() => setSigBannerMsg(null), 5000);
+      appendAuditLog(`Firma profesional cargada previamente como archivo .PNG (${file.name})`);
+    } catch {
+      // ignore
+    } finally {
+      if (globalSigInputRef.current) {
+        globalSigInputRef.current.value = '';
+      }
+    }
+  };
+
   // Gestión del Banco de Ajustes Razonables
   const handleAddAdjustmentToBank = (newItem: AjusteRazonableItem) => {
     setAdjustmentBank((prev) => {
@@ -556,6 +725,45 @@ export default function App() {
     setAdjustmentBank((prev) => {
       const next = prev.filter((i) => i.id !== id);
       persistAndBroadcast(students, next);
+      return next;
+    });
+  };
+
+  // Gestión de Tablas Maestras: Cursos/Años Lectivos y Categorías SIMAT
+  const handleAddCursoCatalog = (newCurso: CursoAnioCatalogItem) => {
+    setCursosCatalog((prev) => {
+      const next = [newCurso, ...prev];
+      localStorage.setItem(STORAGE_CURSOS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
+      return next;
+    });
+    appendAuditLog(`Nuevo curso/año lectivo agregado a Tabla_Cursos_Anios: ${newCurso.nombreCurso} (${newCurso.anioLectivo})`);
+  };
+
+  const handleDeleteCursoCatalog = (id: string) => {
+    setCursosCatalog((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      localStorage.setItem(STORAGE_CURSOS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
+      return next;
+    });
+  };
+
+  const handleAddCategoriaSimat = (newCat: CategoriaSimatCatalogItem) => {
+    setCategoriasCatalog((prev) => {
+      const next = [newCat, ...prev];
+      localStorage.setItem(STORAGE_CATEGORIAS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
+      return next;
+    });
+    appendAuditLog(`Nueva categoría agregada a Tabla_Categorias_SIMAT: ${newCat.categoria}`);
+  };
+
+  const handleDeleteCategoriaSimat = (id: string) => {
+    setCategoriasCatalog((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      localStorage.setItem(STORAGE_CATEGORIAS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
       return next;
     });
   };
@@ -622,17 +830,25 @@ export default function App() {
       {/* SIDEBAR DE NAVEGACIÓN INSTITUCIONAL (Oculto al imprimir PDF) */}
       <aside className="no-print lg:w-64 xl:w-72 bg-[#F4F4F0] border-b lg:border-b-0 lg:border-r border-[#E2E8F0] flex flex-col justify-between shrink-0">
         <div className="p-4 sm:p-5 space-y-6">
-          {/* Marca Ekirayá IEP */}
-          <div className="flex items-center justify-between lg:block">
+          {/* Marca Institucional Colegio Ekirayá Montessori */}
+          <div className="flex items-center justify-between lg:block space-y-0 lg:space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#0F766E] text-white flex items-center justify-center font-serif-editorial font-bold text-xl shadow-xs">
-                E
+              <div className="bg-white border border-[#CBD5E1] rounded-xl px-2.5 py-1.5 flex items-center justify-center shadow-2xs shrink-0">
+                <img
+                  src={EKIRAYA_LOGO_URL}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
+                  }}
+                  alt="Colegio Ekirayá Montessori"
+                  className="h-9 sm:h-10 w-auto object-contain"
+                />
               </div>
               <div>
-                <h1 className="text-lg font-bold tracking-tight text-[#0F172A] font-serif-editorial leading-none">
-                  Ekirayá IEP
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#0F172A] font-serif-editorial leading-tight">
+                  Colegio Ekirayá
                 </h1>
-                <p className="text-[11px] font-medium text-[#475569] mt-1">
+                <p className="text-[11px] font-medium text-[#475569] mt-0.5">
                   PIAR • DUA • Talentos MEN
                 </p>
               </div>
@@ -705,6 +921,29 @@ export default function App() {
                 }`}
               >
                 {adjustmentBank.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('catalogos')}
+              className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap cursor-pointer ${
+                activeView === 'catalogos'
+                  ? 'bg-[#0F766E] text-white shadow-xs'
+                  : 'text-[#334155] hover:bg-white/80'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 shrink-0" />
+                Tablas Cursos y SIMAT
+              </span>
+              <span
+                className={`text-[11px] px-1.5 py-0.5 rounded font-mono-code ${
+                  activeView === 'catalogos'
+                    ? 'bg-teal-900 text-teal-100'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                Sheets
               </span>
             </button>
 
@@ -788,8 +1027,17 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* TOPBAR CON SELECTOR DE ROL PERSONALIZADO Y ACCIONES GLOBALES */}
         <header className="no-print bg-white border-b border-[#E2E8F0] px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30">
-          {/* Selector de Perfil / Rol de Usuario */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Selector de Perfil / Rol de Usuario con Logo Institucional */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <img
+              src={EKIRAYA_LOGO_URL}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
+              }}
+              alt="Logo Colegio Ekirayá Montessori"
+              className="hidden sm:block h-7 w-auto object-contain mr-1"
+            />
             <span className="text-xs font-bold uppercase tracking-wider text-[#64748B] mr-1">
               Perfil de Usuario Activo:
             </span>
@@ -836,8 +1084,32 @@ export default function App() {
             </div>
           </div>
 
-          {/* Botones Rápidos de Base de Datos, Excel y Nuevo PIAR */}
+          {/* Botones Rápidos de Firma .PNG, Base de Datos, Excel y Nuevo PIAR */}
           <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={globalSigInputRef}
+              type="file"
+              accept=".png,image/png,image/jpeg,image/webp"
+              onChange={handleGlobalPngUpload}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => globalSigInputRef.current?.click()}
+              title="Cargar previamente tu firma en archivo .PNG para los reportes PDF Oficiales"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                preloadedSignature
+                  ? 'bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-300'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+              }`}
+            >
+              <Upload className="w-3.5 h-3.5 text-teal-700" />
+              {preloadedSignature
+                ? `Firma .PNG Lista (${preloadedSignature.fileName.slice(0, 14)})`
+                : 'Cargar Firma (.png)'}
+            </button>
+
             <button
               type="button"
               onClick={() => setIsSheetsModalOpen(true)}
@@ -881,7 +1153,89 @@ export default function App() {
         </header>
 
         {/* ÁREA DE TRABAJO CENTRAL */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto space-y-5">
+          {sigBannerMsg && (
+            <div className="no-print bg-teal-900 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+                {sigBannerMsg}
+              </span>
+              {preloadedSignature && (
+                <img
+                  src={preloadedSignature.firmaPngDataUrl}
+                  alt="Firma PNG Pre-cargada"
+                  className="h-7 bg-white px-2 py-0.5 rounded object-contain"
+                />
+              )}
+            </div>
+          )}
+          {/* BARRA DIRECTA DE UBICACIÓN Y ACCESO A LA HOJA DE GOOGLE SHEETS */}
+          <div className="no-print bg-emerald-950 text-white rounded-xl p-4 sm:px-5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs border border-emerald-800">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-800/80 text-emerald-200 shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-white">
+                    {syncStatus.spreadsheetUrl
+                      ? `Hoja Activa: ${syncStatus.spreadsheetTitle}`
+                      : 'Base de Datos en Google Sheets (7 Pestañas: PIAR, DUA, Cursos 2026-2027 y Categorías SIMAT)'}
+                  </span>
+                  <span className="text-[11px] font-mono-code px-2 py-0.5 rounded bg-emerald-900 text-emerald-200 border border-emerald-700">
+                    {syncStatus.spreadsheetId
+                      ? `ID: ${syncStatus.spreadsheetId.slice(0, 14)}...`
+                      : 'Lista para crear en tu Google Drive'}
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-200/90 mt-0.5">
+                  {syncStatus.spreadsheetUrl
+                    ? 'Sincronizando en tiempo real cada 2 segundos con tu cuenta de Google Sheets.'
+                    : 'Haz clic en "Crear y Abrir mi Hoja en Google Sheets" para generar el archivo en tu Google Drive (docs.google.com/spreadsheets) o vincula una hoja existente.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {syncStatus.spreadsheetUrl ? (
+                <a
+                  href={syncStatus.spreadsheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition shadow-xs"
+                >
+                  Abrir mi Hoja en Google Sheets ↗
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCreateNewGoogleSheet}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Crear y Abrir mi Hoja en Google Sheets
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setActiveView('catalogos')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-800 hover:bg-teal-700 text-white border border-teal-600 text-xs font-semibold transition cursor-pointer"
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-300" />
+                Tablas Cursos (2026-2027) y SIMAT
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSheetsModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-900 hover:bg-emerald-800 text-emerald-100 border border-emerald-700 text-xs font-semibold transition cursor-pointer"
+              >
+                Configurar / Vincular URL
+              </button>
+            </div>
+          </div>
+
           {/* VISTA 1: PANEL DE CONTROL PERSONALIZADO POR ROL */}
           {activeView === 'panel' && (
             <RoleDashboard
@@ -983,7 +1337,14 @@ export default function App() {
                   className="px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs sm:text-sm bg-white"
                 >
                   <option value="TODOS">Todos los Cursos / Grados</option>
-                  {CURSOS_COLOMBIA.map((c) => (
+                  {Array.from(
+                    new Set(
+                      [
+                        ...cursosCatalog.map((c) => c.nombreCurso || c.curso),
+                        ...CURSOS_COLOMBIA,
+                      ].filter(Boolean)
+                    )
+                  ).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
@@ -996,9 +1357,16 @@ export default function App() {
                   className="px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs sm:text-sm bg-white"
                 >
                   <option value="TODOS">Todos los Años Lectivos</option>
-                  <option value="2026">Año Lectivo 2026</option>
-                  <option value="2025">Año Lectivo 2025</option>
-                  <option value="2024">Año Lectivo 2024</option>
+                  {Array.from(
+                    new Set([
+                      ...ANIOS_LECTIVOS_COLOMBIA,
+                      ...cursosCatalog.map((c) => c.anioLectivo),
+                    ])
+                  ).map((yr) => (
+                    <option key={yr} value={yr}>
+                      Año Lectivo {yr}
+                    </option>
+                  ))}
                 </select>
 
                 <select
@@ -1111,10 +1479,18 @@ export default function App() {
 
                         <button
                           onClick={() => setAuditPdfStudent(st)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-300 text-xs font-semibold transition cursor-pointer"
+                        >
+                          <FileCheck2 className="w-3.5 h-3.5 text-teal-700" />
+                          Vista y Firma (.PNG)
+                        </button>
+
+                        <button
+                          onClick={() => exportOfficialPiarPdf(st)}
                           className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#0F766E] hover:bg-[#115E59] text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
                         >
-                          <FileCheck2 className="w-3.5 h-3.5" />
-                          Exportar PDF Auditoría
+                          <FileDown className="w-3.5 h-3.5" />
+                          Exportar PDF Oficial (.pdf)
                         </button>
 
                         {activeRole === 'administrador' && students.length > 1 && (
@@ -1178,6 +1554,27 @@ export default function App() {
               onAddAdjustmentToBank={handleAddAdjustmentToBank}
               onDeleteAdjustmentFromBank={handleDeleteAdjustmentFromBank}
               onApplyAdjustmentToStudent={handleApplyAdjustmentToStudent}
+            />
+          )}
+
+          {/* VISTA 3.5: TABLAS MAESTRAS EN GOOGLE SHEETS (CURSOS, AÑO LECTIVO 2026-2027 Y CATEGORÍAS SIMAT) */}
+          {activeView === 'catalogos' && (
+            <CatalogTablesView
+              cursosCatalog={cursosCatalog}
+              categoriasCatalog={categoriasCatalog}
+              onAddCurso={handleAddCursoCatalog}
+              onDeleteCurso={handleDeleteCursoCatalog}
+              onAddCategoria={handleAddCategoriaSimat}
+              onDeleteCategoria={handleDeleteCategoriaSimat}
+              onForceSyncSheets={() => {
+                if (!accessToken || !syncStatus.spreadsheetId) {
+                  handleCreateNewGoogleSheet();
+                } else {
+                  handleForceManualSync();
+                }
+              }}
+              spreadsheetId={syncStatus.spreadsheetId}
+              isConnected={Boolean(accessToken && syncStatus.spreadsheetId)}
             />
           )}
 
@@ -1298,6 +1695,8 @@ export default function App() {
           initialTab={editorModalState.initialTab}
           roleProfile={roleProfile}
           adjustmentBank={adjustmentBank}
+          cursosCatalog={cursosCatalog}
+          categoriasCatalog={categoriasCatalog}
           onClose={() =>
             setEditorModalState({
               isOpen: false,

@@ -26,7 +26,55 @@ export type NeedCategory =
   | 'Desempeño Superior — Talento Excepcional en Ciencias y Tecnología'
   | 'Desempeño Superior — Talento Excepcional en Artes y Humanidades'
   | 'Doble Excepcionalidad (Talento Excepcional + Ajuste Razonable)'
-  | 'Apoyo Pedagógico Transitorio / DUA Preventivo';
+  | 'Apoyo Pedagógico Transitorio / DUA Preventivo'
+  | (string & {});
+
+export interface CursoAnioCatalogItem {
+  id: string;
+  codigoCurso: string;
+  curso: string;
+  nombreCurso?: string;
+  nivelEducativo:
+    | 'Preescolar'
+    | 'Básica Primaria'
+    | 'Básica Secundaria'
+    | 'Media Académica'
+    | 'Media Vocacional';
+  anioLectivo: string;
+  calendarioEscolar?: 'Calendario A (Feb-Nov)' | 'Calendario B (Sep-Jun)';
+  estadoAnio?: 'Año Lectivo Activo' | 'Proyección Matrícula' | 'Histórico Cerrado';
+  directorGrupo: string;
+  activo?: boolean;
+}
+
+export interface CategoriaSimatCatalogItem {
+  id: string;
+  codigoSimatMen: string;
+  categoriaSimat: NeedCategory;
+  categoria?: NeedCategory;
+  tipoRuta:
+    | 'PIAR — Ajuste Razonable (Decreto 1421/2017)'
+    | 'Desempeño Superior / Talento Excepcional (MEN Doc. 19)'
+    | 'Doble Excepcionalidad (Talento + Ajuste Razonable)'
+    | 'DUA Preventivo / Apoyo Pedagógico'
+    | (string & {});
+  esDesempenoSuperior?: boolean;
+  normativaReferencia?: string;
+  principioDuaPrioritario: DuaPrinciple | (string & {});
+  descripcionTecnica?: string;
+  requisitoSoporteAuditor: string;
+  requiereSoporteClinicoOPedagogico?: string;
+}
+
+export interface PreloadedSignatureConfig {
+  firmaPngDataUrl: string;
+  fileName: string;
+  nombreProfesional: string;
+  cargo: string;
+  tarjetaProfesional: string;
+  institucion: string;
+  updatedAt: string;
+}
 
 export type DuaPrinciple =
   | 'Principio I: Múltiples formas de Implicación y Motivación'

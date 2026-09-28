@@ -21,6 +21,10 @@ import {
   SyncStatus,
   UserRole,
 } from '../types/piar';
+import {
+  EKIRAYA_LOGO_LOCAL_FALLBACK,
+  EKIRAYA_LOGO_URL,
+} from '../utils/exportUtils';
 
 interface RoleDashboardProps {
   activeRole: UserRole;
@@ -66,35 +70,49 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Encabezado contextual según el Rol activo */}
+      {/* Encabezado contextual según el Rol activo con Logo Institucional */}
       <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide uppercase ${roleProfile.badgeColor}`}
-              >
-                {activeRole === 'administrador' && <ShieldCheck className="w-3.5 h-3.5" />}
-                {activeRole === 'psicologa' && <Brain className="w-3.5 h-3.5" />}
-                {activeRole === 'profesor' && <GraduationCap className="w-3.5 h-3.5" />}
-                Panel de {roleProfile.title}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
-                <Lock className="w-3 h-3 text-teal-700" />
-                Encriptación AES-256-GCM Activa (Ley 1581)
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+            <div className="bg-[#FBFBF9] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 flex items-center justify-center shrink-0 shadow-2xs self-start">
+              <img
+                src={EKIRAYA_LOGO_URL}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
+                }}
+                alt="Colegio Ekirayá Montessori"
+                className="h-12 sm:h-14 w-auto object-contain"
+              />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif-editorial">
-              Bienvenido(a), {roleProfile.userName}
-            </h2>
-            <p className="text-sm text-[#475569] max-w-3xl">
-              {activeRole === 'administrador' &&
-                'Supervisión ejecutiva del cumplimiento del Decreto 1421 de 2017, cobertura SIMAT de PIAR y Talentos Excepcionales, auditoría criptográfica en Google Sheets y exportación consolidada para Secretaría de Educación.'}
-              {activeRole === 'psicologa' &&
-                'Gestión clínica y psicopedagógica: valoración diagnóstica confidencial (AES-256), diseño de plantillas PIAR y planes de Desempeño Superior, curaduría del Banco de Ajustes DUA y firma profesional de informes de auditoría.'}
-              {activeRole === 'profesor' &&
-                'Espacio pedagógico de aula: consulta de caracterizaciones estudiantiles, registro ágil de Indicadores Ajustados y Ajustes del Proceso por asignatura con apoyo del Banco DUA, y seguimiento de logros por periodo.'}
-            </p>
+
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide uppercase ${roleProfile.badgeColor}`}
+                >
+                  {activeRole === 'administrador' && <ShieldCheck className="w-3.5 h-3.5" />}
+                  {activeRole === 'psicologa' && <Brain className="w-3.5 h-3.5" />}
+                  {activeRole === 'profesor' && <GraduationCap className="w-3.5 h-3.5" />}
+                  Panel de {roleProfile.title}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-teal-50 text-teal-800 border border-teal-200">
+                  <Lock className="w-3 h-3 text-teal-700" />
+                  Encriptación AES-256-GCM Activa (Ley 1581)
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif-editorial">
+                Bienvenido(a), {roleProfile.userName}
+              </h2>
+              <p className="text-sm text-[#475569] max-w-3xl">
+                {activeRole === 'administrador' &&
+                  'Supervisión ejecutiva del cumplimiento del Decreto 1421 de 2017, cobertura SIMAT de PIAR y Talentos Excepcionales, auditoría criptográfica en Google Sheets y exportación consolidada para Secretaría de Educación.'}
+                {activeRole === 'psicologa' &&
+                  'Gestión clínica y psicopedagógica: valoración diagnóstica confidencial (AES-256), diseño de plantillas PIAR y planes de Desempeño Superior, curaduría del Banco de Ajustes DUA y firma profesional de informes de auditoría.'}
+                {activeRole === 'profesor' &&
+                  'Espacio pedagógico de aula: consulta de caracterizaciones estudiantiles, registro ágil de Indicadores Ajustados y Ajustes del Proceso por asignatura con apoyo del Banco DUA, y seguimiento de logros por periodo.'}
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">

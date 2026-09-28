@@ -18,6 +18,8 @@ import {
 import {
   AdecuacionAsignatura,
   AjusteRazonableItem,
+  CategoriaSimatCatalogItem,
+  CursoAnioCatalogItem,
   DuaPrinciple,
   HistorialAnual,
   NeedCategory,
@@ -26,10 +28,13 @@ import {
   StudentPIAR,
 } from '../types/piar';
 import {
+  ANIOS_LECTIVOS_COLOMBIA,
   ASIGNATURAS_COLOMBIA,
   CATEGORIAS_SIMAT,
   CURSOS_COLOMBIA,
   PLANTILLAS_PIAR,
+  TABLA_CATEGORIAS_SIMAT_INICIAL,
+  TABLA_CURSOS_ANIOS_INICIAL,
 } from '../data/colombianLegislationAndSeed';
 import { formatEncryptedPreview } from '../utils/crypto';
 
@@ -39,6 +44,8 @@ interface PiarEditorModalProps {
   initialTab?: 'general' | 'asignaturas' | 'seguimiento' | 'historial';
   roleProfile: RoleProfile;
   adjustmentBank: AjusteRazonableItem[];
+  cursosCatalog?: CursoAnioCatalogItem[];
+  categoriasCatalog?: CategoriaSimatCatalogItem[];
   onClose: () => void;
   onSave: (updatedStudent: StudentPIAR) => void;
 }
@@ -57,9 +64,27 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
   initialTab = 'general',
   roleProfile,
   adjustmentBank,
+  cursosCatalog = TABLA_CURSOS_ANIOS_INICIAL,
+  categoriasCatalog = TABLA_CATEGORIAS_SIMAT_INICIAL,
   onClose,
   onSave,
 }) => {
+  const availableCourseNames = Array.from(
+    new Set(
+      [...cursosCatalog.map((c) => c.nombreCurso || c.curso), ...CURSOS_COLOMBIA].filter(Boolean)
+    )
+  );
+  const availableSchoolYears = Array.from(
+    new Set([...ANIOS_LECTIVOS_COLOMBIA, ...cursosCatalog.map((c) => c.anioLectivo)].filter(Boolean))
+  );
+  const availableSimatCategories = Array.from(
+    new Set(
+      [
+        ...categoriasCatalog.map((cat) => cat.categoria || cat.categoriaSimat),
+        ...CATEGORIAS_SIMAT,
+      ].filter(Boolean)
+    )
+  );
   const [activeTab, setActiveTab] = useState<'general' | 'asignaturas' | 'seguimiento' | 'historial'>(
     initialTab
   );
@@ -77,8 +102,8 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
       nombresApellidos: '',
       documentoIdentidad: 'TI ',
       edad: 11,
-      curso: '6°A Bachillerato',
-      anioLectivo: '2026',
+      curso: '6° (Sexto - Básica Secundaria)',
+      anioLectivo: '2026-2027',
       categoriaSimat: defaultTemplate.categoriaSugerida,
       esDesempenoSuperior: defaultTemplate.esDesempenoSuperior,
       diagnostico: defaultTemplate.diagnosticoGuia,
@@ -498,14 +523,14 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-[#334155] mb-1">
-                      Curso / Grado *
+                      Curso / Grado (Tabla_Cursos_Anios) *
                     </label>
                     <select
                       value={formData.curso}
                       onChange={(e) => setFormData({ ...formData, curso: e.target.value })}
                       className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] bg-white text-sm text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
                     >
-                      {CURSOS_COLOMBIA.map((c) => (
+                      {availableCourseNames.map((c) => (
                         <option key={c} value={c}>
                           {c}
                         </option>
@@ -515,14 +540,14 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-[#334155] mb-1">
-                      Año Lectivo *
+                      Año Lectivo (2026-2027, etc.) *
                     </label>
                     <select
                       value={formData.anioLectivo}
                       onChange={(e) => setFormData({ ...formData, anioLectivo: e.target.value })}
                       className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] bg-white text-sm text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
                     >
-                      {['2024', '2025', '2026', '2027'].map((yr) => (
+                      {availableSchoolYears.map((yr) => (
                         <option key={yr} value={yr}>
                           {yr}
                         </option>
@@ -562,7 +587,7 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
 
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-[#334155] mb-1">
-                      Categoría SIMAT / Necesidad o Desempeño Superior *
+                      Categoría SIMAT / Necesidad o Desempeño Superior (Tabla_Categorias_SIMAT) *
                     </label>
                     <select
                       value={formData.categoriaSimat}
@@ -570,7 +595,8 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
                         const cat = e.target.value as NeedCategory;
                         const isSup =
                           cat.includes('Desempeño Superior') ||
-                          cat.includes('Doble Excepcionalidad');
+                          cat.includes('Doble Excepcionalidad') ||
+                          cat.includes('Talento');
                         setFormData({
                           ...formData,
                           categoriaSimat: cat,
@@ -579,7 +605,7 @@ export const PiarEditorModal: React.FC<PiarEditorModalProps> = ({
                       }}
                       className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] bg-white text-sm text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
                     >
-                      {CATEGORIAS_SIMAT.map((cat) => (
+                      {availableSimatCategories.map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
                         </option>
