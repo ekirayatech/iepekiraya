@@ -13,6 +13,21 @@ export interface RoleProfile {
   canEditPeriodTracking: boolean;
 }
 
+export interface UsuarioPerfilCatalogItem {
+  id: string;
+  correoInstitucional: string;
+  username: string;
+  nombresApellidos: string;
+  rol: UserRole;
+  cargoArea: string;
+  tarjetaProfesional?: string;
+  claveAcceso: string;
+  cursosAsignados?: string;
+  permisosResumen: string;
+  activo: boolean;
+  ultimoAcceso?: string;
+}
+
 export type NeedCategory =
   | 'TEA (Trastorno del Espectro Autista)'
   | 'TDAH (Déficit de Atención e Hiperactividad)'

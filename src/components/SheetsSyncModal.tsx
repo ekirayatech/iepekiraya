@@ -150,7 +150,7 @@ export const SheetsSyncModal: React.FC<SheetsSyncModalProps> = ({
                   Paso 1: Autenticación y Creación Automática en Google Sheets
                 </div>
                 <p className="text-xs text-[#475569]">
-                  Conecta tu cuenta de Google para crear o actualizar con un clic tu hoja de cálculo estructurada con las 7 pestañas oficiales (<strong>PIAR_Estudiantes</strong>, <strong>Adecuaciones_Asignaturas</strong>, <strong>Seguimiento_Periodos</strong>, <strong>Historial_Anual</strong>, <strong>Banco_Ajustes</strong>, <strong>Tabla_Cursos_Anios</strong> y <strong>Tabla_Categorias_SIMAT</strong>).
+                  Conecta tu cuenta de Google para crear o actualizar con un clic tu hoja de cálculo estructurada con las 8 pestañas oficiales (<strong>PIAR_Estudiantes</strong>, <strong>Adecuaciones_Asignaturas</strong>, <strong>Seguimiento_Periodos</strong>, <strong>Historial_Anual</strong>, <strong>Banco_Ajustes</strong>, <strong>Tabla_Cursos_Anios</strong>, <strong>Tabla_Categorias_SIMAT</strong> y <strong>Usuarios_Perfiles</strong>).
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">

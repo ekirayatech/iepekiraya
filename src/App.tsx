@@ -23,6 +23,8 @@ import {
   Upload,
   FileDown,
   CheckCircle2,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import {
   AjusteRazonableItem,
@@ -31,9 +33,11 @@ import {
   CursoAnioCatalogItem,
   FirmaProfesional,
   PreloadedSignatureConfig,
+  RoleProfile,
   StudentPIAR,
   SyncStatus,
   UserRole,
+  UsuarioPerfilCatalogItem,
 } from './types/piar';
 import {
   ANIOS_LECTIVOS_COLOMBIA,
@@ -43,6 +47,7 @@ import {
   ROLE_PROFILES,
   TABLA_CATEGORIAS_SIMAT_INICIAL,
   TABLA_CURSOS_ANIOS_INICIAL,
+  TABLA_USUARIOS_PERFILES_INICIAL,
 } from './data/colombianLegislationAndSeed';
 import {
   createEkirayaSpreadsheet,
@@ -68,6 +73,7 @@ import { AdjustmentBankView } from './components/AdjustmentBankView';
 import { SheetsSyncModal } from './components/SheetsSyncModal';
 import { LegislationGuideView } from './components/LegislationGuideView';
 import { CatalogTablesView } from './components/CatalogTablesView';
+import { LoginView } from './components/LoginView';
 
 const firebaseConfigModules = import.meta.glob<{ oAuthClientId?: string }>(
   '../firebase-applet-config.json',
@@ -82,6 +88,8 @@ const STORAGE_STUDENTS_KEY = 'ekiraya_iep_students_v1';
 const STORAGE_BANK_KEY = 'ekiraya_iep_bank_v1';
 const STORAGE_CURSOS_KEY = 'ekiraya_iep_cursos_v1';
 const STORAGE_CATEGORIAS_KEY = 'ekiraya_iep_categorias_v1';
+const STORAGE_USUARIOS_KEY = 'ekiraya_iep_usuarios_v1';
+const STORAGE_ACTIVE_USER_KEY = 'ekiraya_iep_active_user_v1';
 const STORAGE_SHEET_META_KEY = 'ekiraya_iep_sheet_meta_v1';
 const DEFAULT_OAUTH_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -89,9 +97,55 @@ const DEFAULT_OAUTH_CLIENT_ID =
   '995821229747-42oilhngiqduavvq12rt7g8g6k1hujmu.apps.googleusercontent.com';
 
 export default function App() {
+  // Hoja Maestra Usuarios_Perfiles sincronizada con Google Sheets
+  const [usuariosCatalog, setUsuariosCatalog] = useState<UsuarioPerfilCatalogItem[]>(
+    () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_USUARIOS_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {
+        // fallback
+      }
+      return TABLA_USUARIOS_PERFILES_INICIAL;
+    }
+  );
+
+  // Usuario autenticado actualmente mediante el Formulario de Login
+  const [currentUser, setCurrentUser] = useState<UsuarioPerfilCatalogItem | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_ACTIVE_USER_KEY);
+      if (saved) {
+        return JSON.parse(saved) as UsuarioPerfilCatalogItem;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
+    try {
+      return !sessionStorage.getItem(STORAGE_ACTIVE_USER_KEY);
+    } catch {
+      return true;
+    }
+  });
+
   // Rol de usuario activo: Administrador, Psicóloga o Profesor
-  const [activeRole, setActiveRole] = useState<UserRole>('psicologa');
-  const roleProfile = ROLE_PROFILES[activeRole];
+  const [activeRole, setActiveRole] = useState<UserRole>(
+    () => currentUser?.rol || 'administrador'
+  );
+  const baseRoleProfile = ROLE_PROFILES[activeRole];
+  const roleProfile: RoleProfile = currentUser && currentUser.rol === activeRole
+    ? {
+        ...baseRoleProfile,
+        userName: currentUser.nombresApellidos,
+        subtitle: `${currentUser.cargoArea} (${currentUser.correoInstitucional})`,
+      }
+    : baseRoleProfile;
 
   // Navegación principal
   const [activeView, setActiveView] = useState<
@@ -260,6 +314,8 @@ export default function App() {
   cursosRef.current = cursosCatalog;
   const categoriasRef = useRef(categoriasCatalog);
   categoriasRef.current = categoriasCatalog;
+  const usuariosRef = useRef(usuariosCatalog);
+  usuariosRef.current = usuariosCatalog;
   const isDirtyForSheetsRef = useRef(true);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -356,7 +412,8 @@ export default function App() {
                 bankRef.current,
                 encryptionKey,
                 cursosRef.current,
-                categoriasRef.current
+                categoriasRef.current,
+                usuariosRef.current
               );
           } else if (!editorModalState.isOpen) {
             const remote = await pullDataFromSpreadsheet(
@@ -373,6 +430,13 @@ export default function App() {
               localStorage.setItem(
                 STORAGE_CATEGORIAS_KEY,
                 JSON.stringify(remote.categoriasCatalog)
+              );
+            }
+            if (remote.usuariosCatalog && remote.usuariosCatalog.length > 0) {
+              setUsuariosCatalog(remote.usuariosCatalog);
+              localStorage.setItem(
+                STORAGE_USUARIOS_KEY,
+                JSON.stringify(remote.usuariosCatalog)
               );
             }
             if (remote.students && remote.students.length > 0) {
@@ -453,7 +517,8 @@ export default function App() {
                 bankRef.current,
                 encryptionKey,
                 cursosRef.current,
-                categoriasRef.current
+                categoriasRef.current,
+                usuariosRef.current
               );
               localStorage.setItem(
                 STORAGE_SHEET_META_KEY,
@@ -504,7 +569,8 @@ export default function App() {
         adjustmentBank,
         encryptionKey,
         cursosCatalog,
-        categoriasCatalog
+        categoriasCatalog,
+        usuariosCatalog
       );
       localStorage.setItem(
         STORAGE_SHEET_META_KEY,
@@ -560,6 +626,10 @@ export default function App() {
           extractedId,
           encryptionKey
         );
+        if (remote.usuariosCatalog && remote.usuariosCatalog.length > 0) {
+          setUsuariosCatalog(remote.usuariosCatalog);
+          localStorage.setItem(STORAGE_USUARIOS_KEY, JSON.stringify(remote.usuariosCatalog));
+        }
         if (remote.students && remote.students.length > 0) {
           setStudents(remote.students);
           localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(remote.students));
@@ -571,7 +641,8 @@ export default function App() {
             adjustmentBank,
             encryptionKey,
             cursosCatalog,
-            categoriasCatalog
+            categoriasCatalog,
+            usuariosCatalog
           );
         }
         appendAuditLog(`Vinculado y sincronizado Google Sheet ID: ${extractedId}`);
@@ -603,7 +674,8 @@ export default function App() {
           adjustmentBank,
           encryptionKey,
           cursosCatalog,
-          categoriasCatalog
+          categoriasCatalog,
+          usuariosCatalog
         );
       } catch {
         // handled in status
@@ -766,6 +838,53 @@ export default function App() {
       isDirtyForSheetsRef.current = true;
       return next;
     });
+  };
+
+  // Gestión de Hoja Usuarios_Perfiles y Autenticación en el Sitio
+  const handleAddUsuarioCatalog = (newUsr: UsuarioPerfilCatalogItem) => {
+    setUsuariosCatalog((prev) => {
+      const next = [newUsr, ...prev];
+      localStorage.setItem(STORAGE_USUARIOS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
+      return next;
+    });
+    appendAuditLog(
+      `Nuevo usuario registrado en hoja Usuarios_Perfiles: ${newUsr.correoInstitucional} (${newUsr.rol})`
+    );
+  };
+
+  const handleDeleteUsuarioCatalog = (id: string) => {
+    setUsuariosCatalog((prev) => {
+      const next = prev.filter((u) => u.id !== id);
+      localStorage.setItem(STORAGE_USUARIOS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
+      return next;
+    });
+  };
+
+  const handleLoginSuccess = (loggedUser: UsuarioPerfilCatalogItem) => {
+    setCurrentUser(loggedUser);
+    setActiveRole(loggedUser.rol);
+    try {
+      sessionStorage.setItem(STORAGE_ACTIVE_USER_KEY, JSON.stringify(loggedUser));
+    } catch {
+      // ignore
+    }
+    setUsuariosCatalog((prev) => {
+      const next = prev.map((u) => (u.id === loggedUser.id ? loggedUser : u));
+      localStorage.setItem(STORAGE_USUARIOS_KEY, JSON.stringify(next));
+      isDirtyForSheetsRef.current = true;
+      return next;
+    });
+    setIsLoginModalOpen(false);
+    appendAuditLog(
+      `Inicio de sesión exitoso desde Formulario de Login (${loggedUser.correoInstitucional} — Perfil: ${loggedUser.rol})`
+    );
+  };
+
+  const handleAddUserAndLogin = (newUser: UsuarioPerfilCatalogItem) => {
+    handleAddUsuarioCatalog(newUser);
+    handleLoginSuccess(newUser);
   };
 
   const handleApplyAdjustmentToStudent = (
@@ -934,7 +1053,7 @@ export default function App() {
             >
               <span className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 shrink-0" />
-                Tablas Cursos y SIMAT
+                Usuarios, Cursos y SIMAT
               </span>
               <span
                 className={`text-[11px] px-1.5 py-0.5 rounded font-mono-code ${
@@ -1082,6 +1201,27 @@ export default function App() {
                 Profesor
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsLoginModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer shadow-2xs"
+              title="Abrir Formulario de Inicio de Sesión o cambiar de usuario institucional"
+            >
+              {currentUser ? (
+                <>
+                  <LogOut className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>
+                    {currentUser.username} ({currentUser.rol}) • Cambiar Login
+                  </span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Formulario de Login</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Botones Rápidos de Firma .PNG, Base de Datos, Excel y Nuevo PIAR */}
@@ -1223,7 +1363,7 @@ export default function App() {
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-800 hover:bg-teal-700 text-white border border-teal-600 text-xs font-semibold transition cursor-pointer"
               >
                 <Layers className="w-3.5 h-3.5 text-amber-300" />
-                Tablas Cursos (2026-2027) y SIMAT
+                Hoja Usuarios_Perfiles, Cursos y SIMAT
               </button>
 
               <button
@@ -1557,15 +1697,19 @@ export default function App() {
             />
           )}
 
-          {/* VISTA 3.5: TABLAS MAESTRAS EN GOOGLE SHEETS (CURSOS, AÑO LECTIVO 2026-2027 Y CATEGORÍAS SIMAT) */}
+          {/* VISTA 3.5: TABLAS MAESTRAS EN GOOGLE SHEETS (USUARIOS_PERFILES, CURSOS Y CATEGORÍAS SIMAT) */}
           {activeView === 'catalogos' && (
             <CatalogTablesView
               cursosCatalog={cursosCatalog}
               categoriasCatalog={categoriasCatalog}
+              usuariosCatalog={usuariosCatalog}
               onAddCurso={handleAddCursoCatalog}
               onDeleteCurso={handleDeleteCursoCatalog}
               onAddCategoria={handleAddCategoriaSimat}
               onDeleteCategoria={handleDeleteCategoriaSimat}
+              onAddUsuario={handleAddUsuarioCatalog}
+              onDeleteUsuario={handleDeleteUsuarioCatalog}
+              onSwitchActiveUser={handleLoginSuccess}
               onForceSyncSheets={() => {
                 if (!accessToken || !syncStatus.spreadsheetId) {
                   handleCreateNewGoogleSheet();
@@ -1736,10 +1880,26 @@ export default function App() {
             exportDetailedExcelWorkbook(
               students,
               adjustmentBank,
-              roleProfile.canEditClinicalDiagnosis
+              roleProfile.canEditClinicalDiagnosis,
+              cursosCatalog,
+              categoriasCatalog,
+              usuariosCatalog
             )
           }
           onExportCsvMatrix={() => exportSubjectAdaptationsCsv(students)}
+        />
+      )}
+
+      {/* FORMULARIO DE INICIO DE SESIÓN (LOGIN) CONECTADO A LA HOJA USUARIOS_PERFILES */}
+      {isLoginModalOpen && (
+        <LoginView
+          usuariosCatalog={usuariosCatalog}
+          syncStatus={syncStatus}
+          onLoginSuccess={handleLoginSuccess}
+          onAddUserAndLogin={handleAddUserAndLogin}
+          onConnectGoogleOAuth={() => handleConnectGoogleOAuth(true)}
+          onForceSyncSheets={handleForceManualSync}
+          onCancel={() => setIsLoginModalOpen(false)}
         />
       )}
     </div>

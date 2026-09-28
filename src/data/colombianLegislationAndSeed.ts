@@ -7,6 +7,7 @@ import {
   RoleProfile,
   StudentPIAR,
   UserRole,
+  UsuarioPerfilCatalogItem,
 } from '../types/piar';
 
 export const ROLE_PROFILES: Record<UserRole, RoleProfile> = {
@@ -47,6 +48,99 @@ export const ROLE_PROFILES: Record<UserRole, RoleProfile> = {
     canEditPeriodTracking: true,
   },
 };
+
+export const TABLA_USUARIOS_PERFILES_INICIAL: UsuarioPerfilCatalogItem[] = [
+  {
+    id: 'usr-01',
+    correoInstitucional: 'mebolanos@cem.edu.co',
+    username: 'mebolanos',
+    nombresApellidos: 'Mg. Esteban Bolaños Rodríguez',
+    rol: 'administrador',
+    cargoArea: 'Rectoría y Coordinación Académica — Administrador General SIEDES / SIMAT',
+    tarjetaProfesional: 'DIR-MEN-2026-CEM',
+    claveAcceso: 'Ekiraya2026*',
+    cursosAsignados: 'Todos los grados (Transición a 11° Media Académica)',
+    permisosResumen:
+      'Acceso total: Diagnóstico clínico Ley 1581, Firma Auditoría PDF, Configuración Google Sheets, Tablas Maestras y Usuarios',
+    activo: true,
+    ultimoAcceso: '2026-09-28',
+  },
+  {
+    id: 'usr-02',
+    correoInstitucional: 'psicorientacion@cem.edu.co',
+    username: 'vmorales',
+    nombresApellidos: 'Dra. Valentina Morales Pineda',
+    rol: 'psicologa',
+    cargoArea: 'Psicóloga Orientadora Escolar — Líder de Inclusión y Equidad (Decreto 1421)',
+    tarjetaProfesional: 'T.P. 148920 COLPSIC',
+    claveAcceso: 'Psico2026*',
+    cursosAsignados: 'Todos los grados (Preescolar, Primaria, Secundaria y Media)',
+    permisosResumen:
+      'Valoración y Diagnóstico Clínico (AES-256), Firma Profesional PDF Oficial, Adecuaciones DUA y Seguimiento Periodos I-IV',
+    activo: true,
+    ultimoAcceso: '2026-09-28',
+  },
+  {
+    id: 'usr-03',
+    correoInstitucional: 'crestrepo@cem.edu.co',
+    username: 'crestrepo',
+    nombresApellidos: 'Lic. Carlos Andrés Restrepo',
+    rol: 'profesor',
+    cargoArea: 'Docente Titular Matemáticas, Física y Pensamiento Lógico',
+    tarjetaProfesional: 'Escalafón 2AE — MEN',
+    claveAcceso: 'Profe2026*',
+    cursosAsignados: '7°B Bachillerato, 8°A Bachillerato, 10°A Media Académica',
+    permisosResumen:
+      'Diseño de Adecuaciones por Asignatura (Anexo 2), Banco DUA y Seguimiento por Periodos (Diagnóstico clínico protegido)',
+    activo: true,
+    ultimoAcceso: '2026-09-28',
+  },
+  {
+    id: 'usr-04',
+    correoInstitucional: 'lgaviria@cem.edu.co',
+    username: 'lgaviria',
+    nombresApellidos: 'Esp. Laura Sofía Gaviria',
+    rol: 'profesor',
+    cargoArea: 'Docente Lengua Castellana, Literatura y Comprensión Lectora',
+    tarjetaProfesional: 'Escalafón 3AM — MEN',
+    claveAcceso: 'Profe2026*',
+    cursosAsignados: '3°A Primaria, 6°A Bachillerato',
+    permisosResumen:
+      'Diseño de Adecuaciones por Asignatura (Anexo 2), Banco DUA y Seguimiento por Periodos (Diagnóstico clínico protegido)',
+    activo: true,
+    ultimoAcceso: '2026-09-27',
+  },
+  {
+    id: 'usr-05',
+    correoInstitucional: 'dquintero@cem.edu.co',
+    username: 'dquintero',
+    nombresApellidos: 'Mg. Diana Marcela Quintero',
+    rol: 'profesor',
+    cargoArea: 'Docente Ciencias Naturales, Biología y Educación Ambiental',
+    tarjetaProfesional: 'Escalafón 3BM — MEN',
+    claveAcceso: 'Profe2026*',
+    cursosAsignados: '8°A Bachillerato, 9°B Bachillerato',
+    permisosResumen:
+      'Diseño de Adecuaciones por Asignatura (Anexo 2), Banco DUA y Seguimiento por Periodos (Diagnóstico clínico protegido)',
+    activo: true,
+    ultimoAcceso: '2026-09-26',
+  },
+  {
+    id: 'usr-06',
+    correoInstitucional: 'crojas@cem.edu.co',
+    username: 'crojas',
+    nombresApellidos: 'Lic. Claudia Patricia Rojas',
+    rol: 'profesor',
+    cargoArea: 'Directora de Grupo Transición — Guía Montessori Primera Infancia',
+    tarjetaProfesional: 'Escalafón 2A — MEN',
+    claveAcceso: 'Profe2026*',
+    cursosAsignados: 'Transición, 1° Primaria',
+    permisosResumen:
+      'Diseño de Adecuaciones DUA Preescolar, Observación Pedagógica y Seguimiento por Periodos',
+    activo: true,
+    ultimoAcceso: '2026-09-25',
+  },
+];
 
 export const ASIGNATURAS_COLOMBIA: string[] = [
   'Matemáticas',

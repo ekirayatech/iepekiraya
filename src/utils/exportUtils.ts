@@ -6,10 +6,12 @@ import {
   FirmaProfesional,
   PreloadedSignatureConfig,
   StudentPIAR,
+  UsuarioPerfilCatalogItem,
 } from '../types/piar';
 import {
   TABLA_CATEGORIAS_SIMAT_INICIAL,
   TABLA_CURSOS_ANIOS_INICIAL,
+  TABLA_USUARIOS_PERFILES_INICIAL,
 } from '../data/colombianLegislationAndSeed';
 
 export const PRELOADED_SIGNATURE_STORAGE_KEY = 'ekiraya_preloaded_signature_png_v1';
@@ -66,7 +68,8 @@ export function exportDetailedExcelWorkbook(
   adjustmentBank: AjusteRazonableItem[],
   includeDecryptedDiagnosis: boolean = true,
   cursosCatalog: CursoAnioCatalogItem[] = TABLA_CURSOS_ANIOS_INICIAL,
-  categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL
+  categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL,
+  usuariosCatalog: UsuarioPerfilCatalogItem[] = TABLA_USUARIOS_PERFILES_INICIAL
 ): void {
   const timestamp = new Date().toISOString().slice(0, 10);
 
@@ -330,6 +333,40 @@ export function exportDetailedExcelWorkbook(
     )
     .join('');
 
+  // Hoja 8: Tabla de Usuarios y Perfiles Institucionales (Usuarios_Perfiles)
+  const sheet8Header = buildRowXml(
+    [
+      'ID Usuario',
+      'Correo Institucional',
+      'Username de Acceso',
+      'Nombres y Apellidos',
+      'Perfil / Rol',
+      'Cargo / Área o Asignatura',
+      'Tarjeta Profesional / Escalafón',
+      'Cursos Asignados',
+      'Permisos del Perfil',
+      'Estado',
+    ],
+    'sHeaderIndigo'
+  );
+
+  const sheet8Rows = usuariosCatalog
+    .map((usr) =>
+      buildRowXml([
+        usr.id,
+        usr.correoInstitucional,
+        usr.username,
+        usr.nombresApellidos,
+        usr.rol.toUpperCase(),
+        usr.cargoArea,
+        usr.tarjetaProfesional || 'N/A',
+        usr.cursosAsignados || 'Todos',
+        usr.permisosResumen,
+        usr.activo ? 'ACTIVO' : 'INACTIVO',
+      ])
+    )
+    .join('');
+
   const workbookXml = `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
@@ -404,6 +441,12 @@ export function exportDetailedExcelWorkbook(
   <Table ss:DefaultColumnWidth="160" ss:DefaultRowHeight="30">
    ${sheet7Header}
    ${sheet7Rows}
+  </Table>
+ </Worksheet>
+ <Worksheet ss:Name="8_Usuarios_Perfiles">
+  <Table ss:DefaultColumnWidth="150" ss:DefaultRowHeight="28">
+   ${sheet8Header}
+   ${sheet8Rows}
   </Table>
  </Worksheet>
 </Workbook>`;

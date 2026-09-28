@@ -3,10 +3,13 @@ import {
   CategoriaSimatCatalogItem,
   CursoAnioCatalogItem,
   StudentPIAR,
+  UserRole,
+  UsuarioPerfilCatalogItem,
 } from '../types/piar';
 import {
   TABLA_CATEGORIAS_SIMAT_INICIAL,
   TABLA_CURSOS_ANIOS_INICIAL,
+  TABLA_USUARIOS_PERFILES_INICIAL,
 } from '../data/colombianLegislationAndSeed';
 import { decryptSensitiveField, encryptSensitiveField } from '../utils/crypto';
 
@@ -43,6 +46,7 @@ export const EKIRAYA_REQUIRED_SHEETS = [
   { title: 'Banco_Ajustes', rowCount: 500, columnCount: 9 },
   { title: 'Tabla_Cursos_Anios', rowCount: 500, columnCount: 8 },
   { title: 'Tabla_Categorias_SIMAT', rowCount: 500, columnCount: 9 },
+  { title: 'Usuarios_Perfiles', rowCount: 300, columnCount: 11 },
 ];
 
 export function extractSpreadsheetId(input: string): string {
@@ -55,7 +59,7 @@ export function extractSpreadsheetId(input: string): string {
 }
 
 /**
- * Verifica que las 7 pestañas (incluyendo Tabla_Cursos_Anios y Tabla_Categorias_SIMAT)
+ * Verifica que las 8 pestañas oficiales (incluyendo Tabla_Cursos_Anios, Tabla_Categorias_SIMAT y Usuarios_Perfiles)
  * existan en la hoja de Google Sheets vinculada; si falta alguna, la crea automáticamente.
  */
 export async function ensureRequiredSheetsExist(
@@ -110,7 +114,7 @@ export async function ensureRequiredSheetsExist(
 
 /**
  * Crea una nueva hoja de cálculo estructurada en la cuenta de Google del usuario
- * con las 7 pestañas oficiales de Ekirayá IEP (incluyendo Tabla_Cursos_Anios y Tabla_Categorias_SIMAT).
+ * con las 8 pestañas oficiales de Ekirayá IEP (incluyendo Usuarios_Perfiles, Tabla_Cursos_Anios y Tabla_Categorias_SIMAT).
  */
 export async function createEkirayaSpreadsheet(
   accessToken: string,
@@ -118,7 +122,8 @@ export async function createEkirayaSpreadsheet(
   adjustmentBank: AjusteRazonableItem[],
   encryptionKey?: string,
   cursosCatalog: CursoAnioCatalogItem[] = TABLA_CURSOS_ANIOS_INICIAL,
-  categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL
+  categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL,
+  usuariosCatalog: UsuarioPerfilCatalogItem[] = TABLA_USUARIOS_PERFILES_INICIAL
 ): Promise<{ spreadsheetId: string; spreadsheetUrl: string; title: string }> {
   const title = `Ekirayá IEP — Base de Datos PIAR & DUA (2026-2027)`;
 
@@ -165,7 +170,8 @@ export async function createEkirayaSpreadsheet(
     adjustmentBank,
     encryptionKey,
     cursosCatalog,
-    categoriasCatalog
+    categoriasCatalog,
+    usuariosCatalog
   );
 
   return { spreadsheetId, spreadsheetUrl, title };
@@ -173,7 +179,7 @@ export async function createEkirayaSpreadsheet(
 
 /**
  * Sincroniza (escribe) todos los registros PIAR, adecuaciones, seguimientos,
- * historial, banco de ajustes, Tabla_Cursos_Anios y Tabla_Categorias_SIMAT hacia el Google Sheet vinculado.
+ * historial, banco de ajustes, Tabla_Cursos_Anios, Tabla_Categorias_SIMAT y Usuarios_Perfiles hacia el Google Sheet vinculado.
  */
 export async function pushAllDataToSpreadsheet(
   accessToken: string,
@@ -182,9 +188,10 @@ export async function pushAllDataToSpreadsheet(
   adjustmentBank: AjusteRazonableItem[],
   encryptionKey?: string,
   cursosCatalog: CursoAnioCatalogItem[] = TABLA_CURSOS_ANIOS_INICIAL,
-  categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL
+  categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL,
+  usuariosCatalog: UsuarioPerfilCatalogItem[] = TABLA_USUARIOS_PERFILES_INICIAL
 ): Promise<void> {
-  // Asegurar que las 7 pestañas existan (incluyendo Tabla_Cursos_Anios y Tabla_Categorias_SIMAT)
+  // Asegurar que las 8 pestañas existan (incluyendo Usuarios_Perfiles)
   await ensureRequiredSheetsExist(accessToken, spreadsheetId);
 
   // 1. Construir filas de PIAR_Estudiantes con Diagnóstico Cifrado AES-256-GCM
@@ -419,6 +426,39 @@ export async function pushAllDataToSpreadsheet(
     ]);
   }
 
+  // 8. Construir filas de Usuarios_Perfiles (Usuarios, Perfiles, Roles y Credenciales Institucionales)
+  const usuariosRows: string[][] = [
+    [
+      'ID_Usuario',
+      'Correo_Institucional',
+      'Username_Acceso',
+      'Nombres_Apellidos',
+      'Perfil_Rol',
+      'Cargo_Area_Asignatura',
+      'Tarjeta_Profesional_Registro',
+      'Clave_O_Pin_Acceso',
+      'Permisos_Perfil',
+      'Estado_Usuario',
+      'Payload_JSON',
+    ],
+  ];
+
+  for (const usr of usuariosCatalog) {
+    usuariosRows.push([
+      usr.id,
+      usr.correoInstitucional,
+      usr.username,
+      usr.nombresApellidos,
+      usr.rol,
+      usr.cargoArea,
+      usr.tarjetaProfesional || 'N/A',
+      usr.claveAcceso,
+      usr.permisosResumen,
+      usr.activo ? 'ACTIVO' : 'INACTIVO',
+      JSON.stringify(usr),
+    ]);
+  }
+
   const batchUpdateUrl = `${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`;
   const body = {
     valueInputOption: 'RAW',
@@ -430,6 +470,7 @@ export async function pushAllDataToSpreadsheet(
       { range: 'Banco_Ajustes!A1', values: bancoRows },
       { range: 'Tabla_Cursos_Anios!A1', values: cursosRows },
       { range: 'Tabla_Categorias_SIMAT!A1', values: categoriasRows },
+      { range: 'Usuarios_Perfiles!A1', values: usuariosRows },
     ],
   };
 
@@ -450,7 +491,7 @@ export async function pushAllDataToSpreadsheet(
 
 /**
  * Lee los registros en tiempo real desde el Google Sheet vinculado (incluyendo
- * Tabla_Cursos_Anios y Tabla_Categorias_SIMAT) y descifra los diagnósticos con AES-256-GCM.
+ * Tabla_Cursos_Anios, Tabla_Categorias_SIMAT y Usuarios_Perfiles) y descifra los diagnósticos con AES-256-GCM.
  */
 export async function pullDataFromSpreadsheet(
   accessToken: string,
@@ -461,12 +502,14 @@ export async function pullDataFromSpreadsheet(
   adjustmentBank: AjusteRazonableItem[] | null;
   cursosCatalog: CursoAnioCatalogItem[] | null;
   categoriasCatalog: CategoriaSimatCatalogItem[] | null;
+  usuariosCatalog: UsuarioPerfilCatalogItem[] | null;
 }> {
   const rangesQuery = [
     'ranges=PIAR_Estudiantes!A2:O500',
     'ranges=Banco_Ajustes!A2:I500',
     'ranges=Tabla_Cursos_Anios!A2:H500',
     'ranges=Tabla_Categorias_SIMAT!A2:I500',
+    'ranges=Usuarios_Perfiles!A2:K300',
   ].join('&');
 
   const batchGetUrl = `${SHEETS_API_BASE}/${spreadsheetId}/values:batchGet?${rangesQuery}`;
@@ -478,7 +521,7 @@ export async function pullDataFromSpreadsheet(
 
   if (!res.ok) {
     if (res.status === 400) {
-      // Si la hoja vinculada aún no tiene creadas las pestañas nuevas (Tabla_Cursos_Anios o Tabla_Categorias_SIMAT),
+      // Si la hoja vinculada aún no tiene creadas las pestañas nuevas (Tabla_Cursos_Anios, Tabla_Categorias_SIMAT o Usuarios_Perfiles),
       // aseguramos que se creen en segundo plano y retornamos null para poblarlas.
       await ensureRequiredSheetsExist(accessToken, spreadsheetId);
       return {
@@ -486,6 +529,7 @@ export async function pullDataFromSpreadsheet(
         adjustmentBank: null,
         cursosCatalog: null,
         categoriasCatalog: null,
+        usuariosCatalog: null,
       };
     }
     const errText = await res.text();
@@ -498,6 +542,7 @@ export async function pullDataFromSpreadsheet(
   const rawBankRows: string[][] = valueRanges[1]?.values || [];
   const rawCursosRows: string[][] = valueRanges[2]?.values || [];
   const rawCategoriasRows: string[][] = valueRanges[3]?.values || [];
+  const rawUsuariosRows: string[][] = valueRanges[4]?.values || [];
 
   const parsedStudents: StudentPIAR[] = [];
   for (const row of rawStudentRows) {
@@ -604,10 +649,66 @@ export async function pullDataFromSpreadsheet(
     }
   }
 
+  const parsedUsuarios: UsuarioPerfilCatalogItem[] = [];
+  for (const row of rawUsuariosRows) {
+    const jsonCol = row[10];
+    const normalizeRole = (rawRole?: string): UserRole => {
+      const lower = (rawRole || '').toLowerCase();
+      if (lower.includes('admin') || lower.includes('rector') || lower.includes('coord')) {
+        return 'administrador';
+      }
+      if (lower.includes('psico') || lower.includes('orient')) {
+        return 'psicologa';
+      }
+      return 'profesor';
+    };
+
+    if (jsonCol) {
+      try {
+        const parsed = JSON.parse(jsonCol) as UsuarioPerfilCatalogItem;
+        parsedUsuarios.push({
+          ...parsed,
+          correoInstitucional: row[1] || parsed.correoInstitucional,
+          username: row[2] || parsed.username,
+          nombresApellidos: row[3] || parsed.nombresApellidos,
+          rol: row[4] ? normalizeRole(row[4]) : parsed.rol,
+          cargoArea: row[5] || parsed.cargoArea,
+          tarjetaProfesional: row[6] || parsed.tarjetaProfesional,
+          claveAcceso: row[7] || parsed.claveAcceso,
+          permisosResumen: row[8] || parsed.permisosResumen,
+          activo: row[9] ? row[9].toUpperCase() !== 'INACTIVO' : parsed.activo,
+        });
+      } catch {
+        // Ignorar fila corrupta
+      }
+    } else if (row[1] || row[2]) {
+      const roleVal = normalizeRole(row[4]);
+      parsedUsuarios.push({
+        id: row[0] || `usr-${Math.random().toString(36).slice(2, 7)}`,
+        correoInstitucional: row[1] || `${row[2]}@cem.edu.co`,
+        username: row[2] || (row[1] ? row[1].split('@')[0] : 'usuario'),
+        nombresApellidos: row[3] || 'Usuario Institucional CEM',
+        rol: roleVal,
+        cargoArea: row[5] || 'Docente / Profesional Institucional',
+        tarjetaProfesional: row[6] || 'N/A',
+        claveAcceso: row[7] || 'Ekiraya2026*',
+        permisosResumen:
+          row[8] ||
+          (roleVal === 'administrador'
+            ? 'Acceso total institucional'
+            : roleVal === 'psicologa'
+              ? 'Diagnóstico Clínico Ley 1581, Firma Auditoría y Seguimiento'
+              : 'Adecuaciones por Asignatura y Seguimiento por Periodos'),
+        activo: row[9] ? row[9].toUpperCase() !== 'INACTIVO' : true,
+      });
+    }
+  }
+
   return {
     students: parsedStudents.length > 0 ? parsedStudents : null,
     adjustmentBank: parsedBank.length > 0 ? parsedBank : null,
     cursosCatalog: parsedCursos.length > 0 ? parsedCursos : null,
     categoriasCatalog: parsedCategorias.length > 0 ? parsedCategorias : null,
+    usuariosCatalog: parsedUsuarios.length > 0 ? parsedUsuarios : null,
   };
 }

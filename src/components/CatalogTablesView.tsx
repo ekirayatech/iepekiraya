@@ -1,51 +1,86 @@
 import React, { useState } from 'react';
 import {
   BookOpen,
+  Brain,
   Calendar,
   CheckCircle2,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   GraduationCap,
+  KeyRound,
   Layers,
+  LogIn,
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
+  UserPlus,
+  Users,
 } from 'lucide-react';
 import {
   CategoriaSimatCatalogItem,
   CursoAnioCatalogItem,
   NeedCategory,
+  UserRole,
+  UsuarioPerfilCatalogItem,
 } from '../types/piar';
 import { ANIOS_LECTIVOS_COLOMBIA } from '../data/colombianLegislationAndSeed';
 
 interface CatalogTablesViewProps {
   cursosCatalog: CursoAnioCatalogItem[];
   categoriasCatalog: CategoriaSimatCatalogItem[];
+  usuariosCatalog: UsuarioPerfilCatalogItem[];
   onAddCurso: (curso: CursoAnioCatalogItem) => void;
   onDeleteCurso: (id: string) => void;
   onAddCategoria: (cat: CategoriaSimatCatalogItem) => void;
   onDeleteCategoria: (id: string) => void;
+  onAddUsuario: (usr: UsuarioPerfilCatalogItem) => void;
+  onDeleteUsuario: (id: string) => void;
+  onSwitchActiveUser?: (usr: UsuarioPerfilCatalogItem) => void;
   onForceSyncSheets: () => void;
   spreadsheetId: string;
   isConnected: boolean;
+  initialSubTab?: 'usuarios' | 'cursos' | 'simat';
 }
 
 export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
   cursosCatalog,
   categoriasCatalog,
+  usuariosCatalog,
   onAddCurso,
   onDeleteCurso,
   onAddCategoria,
   onDeleteCategoria,
+  onAddUsuario,
+  onDeleteUsuario,
+  onSwitchActiveUser,
   onForceSyncSheets,
   spreadsheetId,
   isConnected,
+  initialSubTab = 'usuarios',
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'cursos' | 'simat'>('cursos');
+  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'cursos' | 'simat'>(
+    initialSubTab
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAnio, setFilterAnio] = useState<string>('TODOS');
+  const [filterRol, setFilterRol] = useState<string>('TODOS');
+  const [showPasswords, setShowPasswords] = useState(false);
+
+  // Formulario nuevo Usuario / Perfil en Hoja Usuarios_Perfiles
+  const [showNewUserForm, setShowNewUserForm] = useState(false);
+  const [usrNombres, setUsrNombres] = useState('');
+  const [usrCorreo, setUsrCorreo] = useState('');
+  const [usrUsername, setUsrUsername] = useState('');
+  const [usrRol, setUsrRol] = useState<UserRole>('profesor');
+  const [usrCargo, setUsrCargo] = useState('');
+  const [usrTarjeta, setUsrTarjeta] = useState('');
+  const [usrClave, setUsrClave] = useState('Ekiraya2026*');
+  const [usrCursos, setUsrCursos] = useState('');
 
   // Formulario nuevo Curso / Año Lectivo
   const [showNewCursoForm, setShowNewCursoForm] = useState(false);
@@ -71,6 +106,52 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
   );
   const [descripcionTecnica, setDescripcionTecnica] = useState('');
   const [requiereSoporte, setRequiereSoporte] = useState('');
+
+  const handleCreateUsuario = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!usrNombres.trim() || !usrCorreo.trim() || !usrClave.trim()) return;
+
+    const derivedUsername =
+      usrUsername.trim() || usrCorreo.trim().split('@')[0].toLowerCase();
+
+    const permisosDefault =
+      usrRol === 'administrador'
+        ? 'Acceso total: Diagnóstico clínico Ley 1581, Firma Auditoría PDF, Configuración Google Sheets, Tablas Maestras y Usuarios'
+        : usrRol === 'psicologa'
+          ? 'Valoración y Diagnóstico Clínico (AES-256), Firma Profesional PDF Oficial, Adecuaciones DUA y Seguimiento Periodos I-IV'
+          : 'Diseño de Adecuaciones por Asignatura (Anexo 2), Banco DUA y Seguimiento por Periodos (Diagnóstico clínico protegido)';
+
+    const newItem: UsuarioPerfilCatalogItem = {
+      id: `usr-${Date.now().toString().slice(-5)}`,
+      correoInstitucional: usrCorreo.trim().toLowerCase(),
+      username: derivedUsername,
+      nombresApellidos: usrNombres.trim(),
+      rol: usrRol,
+      cargoArea:
+        usrCargo.trim() ||
+        (usrRol === 'administrador'
+          ? 'Rectoría / Coordinación Académica'
+          : usrRol === 'psicologa'
+            ? 'Psicorientación Escolar y Apoyo Pedagógico'
+            : 'Docente de Aula / Área Académica'),
+      tarjetaProfesional: usrTarjeta.trim() || 'Escalafón / Registro MEN',
+      claveAcceso: usrClave.trim(),
+      cursosAsignados: usrCursos.trim() || 'Todos los cursos asignados',
+      permisosResumen: permisosDefault,
+      activo: true,
+      ultimoAcceso: new Date().toISOString().slice(0, 10),
+    };
+
+    onAddUsuario(newItem);
+    setUsrNombres('');
+    setUsrCorreo('');
+    setUsrUsername('');
+    setUsrCargo('');
+    setUsrTarjeta('');
+    setUsrClave('Ekiraya2026*');
+    setUsrCursos('');
+    setShowNewUserForm(false);
+  };
 
   const handleCreateCurso = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +209,19 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
     new Set([...ANIOS_LECTIVOS_COLOMBIA, ...cursosCatalog.map((c) => c.anioLectivo)])
   );
 
+  const filteredUsuarios = usuariosCatalog.filter((u) => {
+    const matchesRol = filterRol === 'TODOS' || u.rol === filterRol;
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      u.nombresApellidos.toLowerCase().includes(q) ||
+      u.correoInstitucional.toLowerCase().includes(q) ||
+      u.username.toLowerCase().includes(q) ||
+      u.cargoArea.toLowerCase().includes(q) ||
+      u.rol.toLowerCase().includes(q);
+    return matchesRol && matchesSearch;
+  });
+
   const filteredCursos = cursosCatalog.filter((c) => {
     const courseLabel = c.nombreCurso || c.curso || '';
     const matchesAnio = filterAnio === 'TODOS' || c.anioLectivo === filterAnio;
@@ -153,15 +247,40 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
     );
   });
 
+  const renderRoleBadge = (rol: UserRole) => {
+    if (rol === 'administrador') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-teal-50 text-teal-800 border border-teal-200">
+          <ShieldCheck className="w-3 h-3" />
+          Administrador
+        </span>
+      );
+    }
+    if (rol === 'psicologa') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200">
+          <Brain className="w-3 h-3" />
+          Psicóloga
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
+        <GraduationCap className="w-3 h-3" />
+        Profesor
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Cabecera de sincronización con Google Sheets */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              Pestañas en Google Sheets: Tabla_Cursos_Anios & Tabla_Categorias_SIMAT
+              Pestañas en Google Sheets: Usuarios_Perfiles, Tabla_Cursos_Anios & Tabla_Categorias_SIMAT
             </span>
             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -169,13 +288,14 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
             </span>
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            Tablas Maestras en Google Sheets: Cursos, Año Lectivo y Categorías SIMAT
+            Tablas Maestras en Google Sheets: Usuarios y Perfiles, Cursos (2026-2027) y Categorías SIMAT
           </h2>
           <p className="text-xs text-slate-600 max-w-3xl">
-            Estas dos tablas alimentan los selectores del formulario PIAR y se crean automáticamente como pestañas oficiales{' '}
+            Estas tres tablas alimentan el formulario de Inicio de Sesión (Login) y los selectores PIAR, y se crean automáticamente como pestañas oficiales{' '}
+            <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono">Usuarios_Perfiles</code>,{' '}
             <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono">Tabla_Cursos_Anios</code> y{' '}
             <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono">Tabla_Categorias_SIMAT</code>{' '}
-            dentro de tu archivo de Google Sheets.
+            en tu archivo de Google Sheets.
           </p>
         </div>
 
@@ -186,8 +306,8 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
           >
             <RefreshCw className="w-3.5 h-3.5" />
             {isConnected
-              ? 'Actualizar Tablas en Google Sheets Ahora'
-              : 'Conectar y Crear Tablas en Google Sheets'}
+              ? 'Sincronizar 8 Pestañas con Google Sheets Ahora'
+              : 'Conectar y Crear Pestañas en Google Sheets'}
           </button>
 
           {spreadsheetId && (
@@ -205,8 +325,23 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
       </div>
 
       {/* Selector de Tabla Activa y Búsqueda */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setActiveSubTab('usuarios')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+              activeSubTab === 'usuarios'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <Users className="w-4 h-4 text-emerald-400" />
+            <span>1. Hoja Usuarios y Perfiles (Login)</span>
+            <span className="px-1.5 py-0.2 rounded-md text-[11px] bg-white/20">
+              {usuariosCatalog.length}
+            </span>
+          </button>
+
           <button
             onClick={() => setActiveSubTab('cursos')}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
@@ -216,7 +351,7 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
             }`}
           >
             <Calendar className="w-4 h-4 text-teal-400" />
-            <span>1. Tabla de Cursos y Año Lectivo (2026-2027, etc.)</span>
+            <span>2. Tabla de Cursos y Año Lectivo (2026-2027)</span>
             <span className="px-1.5 py-0.2 rounded-md text-[11px] bg-white/20">
               {cursosCatalog.length}
             </span>
@@ -231,7 +366,7 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
             }`}
           >
             <Layers className="w-4 h-4 text-amber-400" />
-            <span>2. Tabla Categorías SIMAT / Necesidad o Desempeño Superior</span>
+            <span>3. Tabla Categorías SIMAT / Desempeño Superior</span>
             <span className="px-1.5 py-0.2 rounded-md text-[11px] bg-white/20">
               {categoriasCatalog.length}
             </span>
@@ -245,14 +380,281 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar curso, año 2026-2027 o categoría SIMAT..."
+              placeholder="Buscar usuario, correo, curso o categoría..."
               className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-teal-600 w-64"
             />
           </div>
         </div>
       </div>
 
-      {/* CONTENIDO PESTAÑA 1: TABLA DE CURSOS Y AÑOS LECTIVOS */}
+      {/* CONTENIDO PESTAÑA 1: HOJA DE USUARIOS Y PERFILES (Usuarios_Perfiles) */}
+      {activeSubTab === 'usuarios' && (
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
+            <div>
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-teal-700" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Hoja en Google Sheets:{' '}
+                  <span className="font-mono text-teal-700">Usuarios_Perfiles</span>
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Directorio de usuarios institucionales autorizados para el Formulario de Login (Administrador, Psicóloga Orientadora y Profesores por Área).
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={filterRol}
+                onChange={(e) => setFilterRol(e.target.value)}
+                className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-slate-200 text-slate-700"
+              >
+                <option value="TODOS">Todos los Perfiles / Roles</option>
+                <option value="administrador">Perfil: Administrador</option>
+                <option value="psicologa">Perfil: Psicóloga</option>
+                <option value="profesor">Perfil: Profesor</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setShowPasswords(!showPasswords)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
+                {showPasswords ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                    Ocultar Claves
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-teal-700" />
+                    Ver Claves Login
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowNewUserForm(!showNewUserForm)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 transition cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Agregar Usuario / Perfil</span>
+              </button>
+            </div>
+          </div>
+
+          {showNewUserForm && (
+            <form
+              onSubmit={handleCreateUsuario}
+              className="p-4 bg-teal-50/50 border-b border-teal-200/80 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
+            >
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Nombres y Apellidos *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={usrNombres}
+                  onChange={(e) => setUsrNombres(e.target.value)}
+                  placeholder="Ej: Lic. Andrés Felipe Gómez"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Correo Institucional (Login) *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={usrCorreo}
+                  onChange={(e) => setUsrCorreo(e.target.value)}
+                  placeholder="agomez@cem.edu.co"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Username y Clave de Acceso *
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={usrUsername}
+                    onChange={(e) => setUsrUsername(e.target.value)}
+                    placeholder="agomez"
+                    className="w-1/2 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-mono"
+                  />
+                  <input
+                    type="text"
+                    required
+                    value={usrClave}
+                    onChange={(e) => setUsrClave(e.target.value)}
+                    placeholder="Clave*"
+                    className="w-1/2 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Perfil / Rol de Usuario *
+                </label>
+                <select
+                  value={usrRol}
+                  onChange={(e) => setUsrRol(e.target.value as UserRole)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-semibold"
+                >
+                  <option value="administrador">Administrador Institucional</option>
+                  <option value="psicologa">Profesional Psicóloga / Orientación</option>
+                  <option value="profesor">Profesor de Aula / Área</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Cargo / Área o Asignatura a Cargo
+                </label>
+                <input
+                  type="text"
+                  value={usrCargo}
+                  onChange={(e) => setUsrCargo(e.target.value)}
+                  placeholder="Ej: Docente de Inglés y Humanidades — Secundaria"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Tarjeta Profesional / Escalafón MEN
+                </label>
+                <input
+                  type="text"
+                  value={usrTarjeta}
+                  onChange={(e) => setUsrTarjeta(e.target.value)}
+                  placeholder="Ej: T.P. 148920 / Escalafón 2A"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Cursos Asignados
+                  </label>
+                  <input
+                    type="text"
+                    value={usrCursos}
+                    onChange={(e) => setUsrCursos(e.target.value)}
+                    placeholder="Ej: 6°A, 7°B, 8°A"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 cursor-pointer mt-4 shrink-0"
+                >
+                  Guardar en Hoja
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-4">Usuario / Correo</th>
+                  <th className="py-3 px-4">Nombres y Cargo Institucional</th>
+                  <th className="py-3 px-4">Perfil / Rol</th>
+                  <th className="py-3 px-4">Clave Login</th>
+                  <th className="py-3 px-4">Permisos de Perfil (Decreto 1421 / Ley 1581)</th>
+                  <th className="py-3 px-4">Estado</th>
+                  <th className="py-3 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/70 text-xs">
+                {filteredUsuarios.map((usr) => (
+                  <tr key={usr.id} className="hover:bg-slate-50/80 transition align-top">
+                    <td className="py-3 px-4 font-mono">
+                      <div className="font-bold text-slate-900">{usr.correoInstitucional}</div>
+                      <div className="text-[11px] text-slate-500">
+                        Usuario: <span className="text-teal-800 font-semibold">{usr.username}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-slate-900">{usr.nombresApellidos}</div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">{usr.cargoArea}</div>
+                      {usr.tarjetaProfesional && (
+                        <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                          Registro: {usr.tarjetaProfesional}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">{renderRoleBadge(usr.rol)}</td>
+                    <td className="py-3 px-4 font-mono whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-slate-800 border border-slate-200 text-[11px]">
+                        <KeyRound className="w-3 h-3 text-teal-700" />
+                        {showPasswords ? usr.claveAcceso : '••••••••••'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-600 max-w-xs">
+                      <p className="text-[11px] leading-relaxed">{usr.permisosResumen}</p>
+                      {usr.cursosAsignados && (
+                        <p className="text-[10px] text-teal-800 font-medium mt-1">
+                          Cursos: {usr.cursosAsignados}
+                        </p>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                          usr.activo !== false
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        {usr.activo !== false ? 'ACTIVO' : 'INACTIVO'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1">
+                        {onSwitchActiveUser && (
+                          <button
+                            type="button"
+                            onClick={() => onSwitchActiveUser(usr)}
+                            title="Iniciar sesión con este usuario"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-[11px] font-semibold transition cursor-pointer"
+                          >
+                            <LogIn className="w-3 h-3" />
+                            Usar Perfil
+                          </button>
+                        )}
+                        {usuariosCatalog.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteUsuario(usr.id)}
+                            title="Eliminar usuario de la tabla"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* CONTENIDO PESTAÑA 2: TABLA DE CURSOS Y AÑOS LECTIVOS */}
       {activeSubTab === 'cursos' && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
           <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
@@ -441,7 +843,7 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
         </div>
       )}
 
-      {/* CONTENIDO PESTAÑA 2: TABLA DE CATEGORÍAS SIMAT / NECESIDAD O DESEMPEÑO SUPERIOR */}
+      {/* CONTENIDO PESTAÑA 3: TABLA DE CATEGORÍAS SIMAT / NECESIDAD O DESEMPEÑO SUPERIOR */}
       {activeSubTab === 'simat' && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
           <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
