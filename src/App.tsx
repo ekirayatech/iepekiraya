@@ -1089,14 +1089,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* Botón móvil de estado Google Sheets */}
-            <button
-              onClick={() => setIsSheetsModalOpen(true)}
-              className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#CBD5E1] text-xs font-semibold text-teal-800"
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Sync 2s
-            </button>
+            {/* Botón móvil de estado Google Sheets — Exclusivo Administrador */}
+            {activeRole === 'administrador' && (
+              <button
+                onClick={() => setIsSheetsModalOpen(true)}
+                className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#CBD5E1] text-xs font-semibold text-teal-800"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Sync 2s
+              </button>
+            )}
           </div>
 
           {/* Menú de Navegación Principal */}
@@ -1159,28 +1161,30 @@ export default function App() {
               </span>
             </button>
 
-            <button
-              onClick={() => setActiveView('catalogos')}
-              className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap cursor-pointer ${
-                activeView === 'catalogos'
-                  ? 'bg-[#0F766E] text-white shadow-xs'
-                  : 'text-[#334155] hover:bg-white/80'
-              }`}
-            >
-              <span className="flex items-center gap-2.5">
-                <Layers className="w-4 h-4 shrink-0" />
-                Usuarios, Cursos y SIMAT
-              </span>
-              <span
-                className={`text-[11px] px-1.5 py-0.5 rounded font-mono-code ${
+            {activeRole === 'administrador' && (
+              <button
+                onClick={() => setActiveView('catalogos')}
+                className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap cursor-pointer ${
                   activeView === 'catalogos'
-                    ? 'bg-teal-900 text-teal-100'
-                    : 'bg-emerald-100 text-emerald-800'
+                    ? 'bg-[#0F766E] text-white shadow-xs'
+                    : 'text-[#334155] hover:bg-white/80'
                 }`}
               >
-                Sheets
-              </span>
-            </button>
+                <span className="flex items-center gap-2.5">
+                  <Layers className="w-4 h-4 shrink-0" />
+                  Usuarios, Cursos y SIMAT
+                </span>
+                <span
+                  className={`text-[11px] px-1.5 py-0.5 rounded font-mono-code ${
+                    activeView === 'catalogos'
+                      ? 'bg-teal-900 text-teal-100'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}
+                >
+                  Sheets
+                </span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveView('historial')}
@@ -1208,54 +1212,56 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Bloque Inferior de Sincronización en Tiempo Real (Cada 2s) y Encriptación */}
-        <div className="hidden lg:block p-4 space-y-3 border-t border-[#E2E8F0]">
-          <div className="p-3.5 rounded-xl bg-white border border-[#CBD5E1] space-y-2.5 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E] flex items-center gap-1.5">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        {/* Bloque Inferior de Sincronización en Tiempo Real (Cada 2s) — Exclusivo Administrador */}
+        {activeRole === 'administrador' && (
+          <div className="hidden lg:block p-4 space-y-3 border-t border-[#E2E8F0]">
+            <div className="p-3.5 rounded-xl bg-white border border-[#CBD5E1] space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E] flex items-center gap-1.5">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  Google Sheets (2s)
                 </span>
-                Google Sheets (2s)
-              </span>
-              <RefreshCw
-                className={`w-3.5 h-3.5 text-teal-700 ${
-                  syncStatus.isSyncingNow ? 'animate-spin' : ''
-                }`}
-              />
-            </div>
+                <RefreshCw
+                  className={`w-3.5 h-3.5 text-teal-700 ${
+                    syncStatus.isSyncingNow ? 'animate-spin' : ''
+                  }`}
+                />
+              </div>
 
-            <div className="text-[11px] text-[#475569] space-y-1 font-mono-code">
-              <div className="flex justify-between">
-                <span>Pulso TR:</span>
-                <span className="font-semibold text-[#0F172A]">
-                  {syncStatus.lastSyncTimestamp}
-                </span>
+              <div className="text-[11px] text-[#475569] space-y-1 font-mono-code">
+                <div className="flex justify-between">
+                  <span>Pulso TR:</span>
+                  <span className="font-semibold text-[#0F172A]">
+                    {syncStatus.lastSyncTimestamp}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Ciclo #</span>
+                  <span className="font-semibold text-teal-800">
+                    {syncStatus.syncCycleCount} (cada 2s)
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Seguridad:</span>
+                  <span className="font-semibold text-indigo-800">AES-256-GCM</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span>Ciclo #</span>
-                <span className="font-semibold text-teal-800">
-                  {syncStatus.syncCycleCount} (cada 2s)
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Seguridad:</span>
-                <span className="font-semibold text-indigo-800">AES-256-GCM</span>
-              </div>
-            </div>
 
-            <button
-              onClick={() => setIsSheetsModalOpen(true)}
-              className="w-full py-2 px-3 rounded-lg bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              {syncStatus.spreadsheetId
-                ? 'Base Google Sheets Activa'
-                : 'Conectar Google Sheets'}
-            </button>
+              <button
+                onClick={() => setIsSheetsModalOpen(true)}
+                className="w-full py-2 px-3 rounded-lg bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                {syncStatus.spreadsheetId
+                  ? 'Base Google Sheets Activa'
+                  : 'Conectar Google Sheets'}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </aside>
 
       {/* CONTENIDO PRINCIPAL */}
@@ -1293,7 +1299,11 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={() => setActiveRole('psicologa')}
+                onClick={() => {
+                  setActiveRole('psicologa');
+                  setIsSheetsModalOpen(false);
+                  if (activeView === 'catalogos') setActiveView('panel');
+                }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeRole === 'psicologa'
                     ? 'bg-indigo-700 text-white shadow-2xs'
@@ -1306,7 +1316,11 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={() => setActiveRole('profesor')}
+                onClick={() => {
+                  setActiveRole('profesor');
+                  setIsSheetsModalOpen(false);
+                  if (activeView === 'catalogos') setActiveView('panel');
+                }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeRole === 'profesor'
                     ? 'bg-amber-700 text-white shadow-2xs'
@@ -1371,14 +1385,16 @@ export default function App() {
                 : 'Cargar Firma (.png)'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsSheetsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-semibold transition cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              Google Sheets (Sync 2s)
-            </button>
+            {activeRole === 'administrador' && (
+              <button
+                type="button"
+                onClick={() => setIsSheetsModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-semibold transition cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                Google Sheets (Sync 2s)
+              </button>
+            )}
 
             <button
               type="button"
@@ -1430,72 +1446,74 @@ export default function App() {
               )}
             </div>
           )}
-          {/* BARRA DIRECTA DE UBICACIÓN Y ACCESO A LA HOJA DE GOOGLE SHEETS */}
-          <div className="no-print bg-emerald-950 text-white rounded-xl p-4 sm:px-5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs border border-emerald-800">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-800/80 text-emerald-200 shrink-0">
-                <FileSpreadsheet className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs sm:text-sm font-bold text-white">
-                    {syncStatus.spreadsheetUrl
-                      ? `Hoja Activa: ${syncStatus.spreadsheetTitle}`
-                      : 'Base de Datos en Google Sheets (7 Pestañas: PIAR, DUA, Cursos 2026-2027 y Categorías SIMAT)'}
-                  </span>
-                  <span className="text-[11px] font-mono-code px-2 py-0.5 rounded bg-emerald-900 text-emerald-200 border border-emerald-700">
-                    {syncStatus.spreadsheetId
-                      ? `ID: ${syncStatus.spreadsheetId.slice(0, 14)}...`
-                      : 'Lista para crear en tu Google Drive'}
-                  </span>
+          {/* BARRA DIRECTA DE UBICACIÓN Y ACCESO A LA HOJA DE GOOGLE SHEETS — EXCLUSIVO ADMINISTRADOR */}
+          {activeRole === 'administrador' && (
+            <div className="no-print bg-emerald-950 text-white rounded-xl p-4 sm:px-5 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs border border-emerald-800">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-800/80 text-emerald-200 shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
                 </div>
-                <p className="text-xs text-emerald-200/90 mt-0.5">
-                  {syncStatus.spreadsheetUrl
-                    ? 'Sincronizando en tiempo real cada 2 segundos con tu cuenta de Google Sheets.'
-                    : 'Haz clic en "Crear y Abrir mi Hoja en Google Sheets" para generar el archivo en tu Google Drive (docs.google.com/spreadsheets) o vincula una hoja existente.'}
-                </p>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-white">
+                      {syncStatus.spreadsheetUrl
+                        ? `Hoja Activa: ${syncStatus.spreadsheetTitle}`
+                        : 'Base de Datos en Google Sheets (8 Pestañas: PIAR, DUA, Cursos, SIMAT y Usuarios_Perfiles)'}
+                    </span>
+                    <span className="text-[11px] font-mono-code px-2 py-0.5 rounded bg-emerald-900 text-emerald-200 border border-emerald-700">
+                      {syncStatus.spreadsheetId
+                        ? `ID: ${syncStatus.spreadsheetId.slice(0, 14)}...`
+                        : 'Lista para vincular'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-200/90 mt-0.5">
+                    {syncStatus.spreadsheetUrl
+                      ? 'Sincronizando en tiempo real cada 2 segundos con tu archivo de Google Sheets (exclusivo Administrador).'
+                      : 'Configura la conexión por Puente Google Apps Script (Solución B sin OAuth) o crea una hoja en tu Google Drive.'}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {syncStatus.spreadsheetUrl ? (
-                <a
-                  href={syncStatus.spreadsheetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition shadow-xs"
-                >
-                  Abrir mi Hoja en Google Sheets ↗
-                </a>
-              ) : (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {syncStatus.spreadsheetUrl ? (
+                  <a
+                    href={syncStatus.spreadsheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition shadow-xs"
+                  >
+                    Abrir mi Hoja en Google Sheets ↗
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsSheetsModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition shadow-xs cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    Conectar Google Sheets (Solución B)
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={handleCreateNewGoogleSheet}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition shadow-xs cursor-pointer"
+                  onClick={() => setActiveView('catalogos')}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-800 hover:bg-teal-700 text-white border border-teal-600 text-xs font-semibold transition cursor-pointer"
                 >
-                  <PlusCircle className="w-4 h-4" />
-                  Crear y Abrir mi Hoja en Google Sheets
+                  <Layers className="w-3.5 h-3.5 text-amber-300" />
+                  Hoja Usuarios_Perfiles, Cursos y SIMAT
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => setActiveView('catalogos')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-800 hover:bg-teal-700 text-white border border-teal-600 text-xs font-semibold transition cursor-pointer"
-              >
-                <Layers className="w-3.5 h-3.5 text-amber-300" />
-                Hoja Usuarios_Perfiles, Cursos y SIMAT
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsSheetsModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-900 hover:bg-emerald-800 text-emerald-100 border border-emerald-700 text-xs font-semibold transition cursor-pointer"
-              >
-                Configurar / Vincular URL
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSheetsModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-900 hover:bg-emerald-800 text-emerald-100 border border-emerald-700 text-xs font-semibold transition cursor-pointer"
+                >
+                  Configurar / Vincular URL
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* VISTA 1: PANEL DE CONTROL PERSONALIZADO POR ROL */}
           {activeView === 'panel' && (
@@ -1818,8 +1836,8 @@ export default function App() {
             />
           )}
 
-          {/* VISTA 3.5: TABLAS MAESTRAS EN GOOGLE SHEETS (USUARIOS_PERFILES, CURSOS Y CATEGORÍAS SIMAT) */}
-          {activeView === 'catalogos' && (
+          {/* VISTA 3.5: TABLAS MAESTRAS EN GOOGLE SHEETS (EXCLUSIVO ADMINISTRADOR) */}
+          {activeView === 'catalogos' && activeRole === 'administrador' && (
             <CatalogTablesView
               cursosCatalog={cursosCatalog}
               categoriasCatalog={categoriasCatalog}
@@ -1984,8 +2002,8 @@ export default function App() {
         />
       )}
 
-      {/* MODAL DE CONFIGURACIÓN GOOGLE SHEETS (SYNC 2S) Y ENCRIPTACIÓN AES-256 */}
-      {isSheetsModalOpen && (
+      {/* MODAL DE CONFIGURACIÓN GOOGLE SHEETS (SYNC 2S) — EXCLUSIVO ADMINISTRADOR */}
+      {isSheetsModalOpen && activeRole === 'administrador' && (
         <SheetsSyncModal
           syncStatus={syncStatus}
           students={students}

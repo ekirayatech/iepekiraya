@@ -155,7 +155,7 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-bold text-[#0F172A] tabular-nums">{totalPiar}</span>
             <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-              100% Sincronizados
+              {activeRole === 'administrador' ? '100% Sincronizados' : 'Expedientes Activos'}
             </span>
           </div>
           <p className="mt-2 text-xs text-[#64748B]">

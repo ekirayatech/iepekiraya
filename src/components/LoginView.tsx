@@ -217,20 +217,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
     );
   };
 
+  const isAdmin = currentUser?.rol === 'administrador';
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="bg-[#FBFBF9] border border-[#CBD5E1] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden my-auto">
         {/* Barra Superior Institucional */}
         <div className="bg-[#0F172A] text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/90 border border-emerald-700 text-emerald-300 text-xs font-semibold">
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              Hoja: Usuarios_Perfiles
-            </span>
+            {isAdmin ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/90 border border-emerald-700 text-emerald-300 text-xs font-semibold">
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Hoja: Usuarios_Perfiles
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200">
+                <Lock className="w-3.5 h-3.5 text-teal-400" />
+                Acceso Institucional Seguro • Ley 1581 de 2012
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
-            {syncStatus.isConnectedToGoogle && (
+            {isAdmin && syncStatus.isConnectedToGoogle && (
               <button
                 type="button"
                 onClick={handleSyncClick}
@@ -241,16 +250,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => setShowSolutionBPanel(!showSolutionBPanel)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition cursor-pointer"
-            >
-              <Code2 className="w-3.5 h-3.5" />
-              {showSolutionBPanel ? 'Ocultar Apps Script ▲' : 'Conectar Sheets (Sin OAuth) ▼'}
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowSolutionBPanel(!showSolutionBPanel)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition cursor-pointer"
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                {showSolutionBPanel ? 'Ocultar Apps Script ▲' : 'Conectar Sheets (Sin OAuth) ▼'}
+              </button>
+            )}
 
-            {onOpenSheetsModal && (
+            {isAdmin && onOpenSheetsModal && (
               <button
                 type="button"
                 onClick={onOpenSheetsModal}
@@ -287,8 +298,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         </div>
 
-        {/* Barra Interactiva Solución B: Puente Directo Google Apps Script (Sin OAuth) */}
-        {showSolutionBPanel && (
+        {/* Barra Interactiva Solución B: Solo visible para el Administrador */}
+        {isAdmin && showSolutionBPanel && (
           <div className="bg-indigo-50/90 border-b border-indigo-200 px-5 py-3.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs">
@@ -369,7 +380,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         )}
 
-        {syncStatus.lastError && (
+        {isAdmin && syncStatus.lastError && (
           <div className="bg-amber-50 border-b border-amber-300 px-5 py-2.5 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
@@ -665,7 +676,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <Lock className="w-3 h-3 text-teal-700" />
               Protección Ley 1581 • AES-256-GCM
             </span>
-            <span>Sincronización Google Sheets (2.0s)</span>
+            <span>
+              {isAdmin
+                ? 'Sincronización Google Sheets (2.0s)'
+                : 'Decreto 1421 de 2017 • MEN Colombia'}
+            </span>
           </div>
         </div>
       </div>
