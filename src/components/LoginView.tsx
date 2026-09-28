@@ -23,7 +23,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { SyncStatus, UserRole, UsuarioPerfilCatalogItem } from '../types/piar';
-import { EKIRAYA_LOGO_LOCAL_FALLBACK, EKIRAYA_LOGO_URL } from '../utils/exportUtils';
 import { EKIRAYA_APPS_SCRIPT_CODE, isAppsScriptUrl } from '../services/googleSheetsService';
 
 interface LoginViewProps {
@@ -441,37 +440,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
             )}
 
-            {/* Logo y Encabezado */}
-            <div className="flex items-center gap-3.5">
-              <div className="bg-white border border-[#CBD5E1] rounded-xl px-3 py-2 shadow-2xs shrink-0">
-                <img
-                  src={EKIRAYA_LOGO_URL}
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
-                  }}
-                  alt="Logo Colegio Ekirayá Montessori"
-                  className="h-12 w-auto object-contain"
-                />
-              </div>
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E]">
-                  Colegio Ekirayá Montessori
-                </span>
-                <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif-editorial leading-tight">
-                  Ingreso Institucional PIAR & DUA
-                </h1>
-                <p className="text-xs text-[#64748B] mt-0.5">
-                  {isAdmin ? (
-                    <>
-                      Autenticación validada contra la pestaña{' '}
-                      <code className="font-mono-code text-teal-800">Usuarios_Perfiles</code>
-                    </>
-                  ) : (
-                    'Plataforma Institucional de Educación Inclusiva • Decreto 1421 MEN'
-                  )}
-                </p>
-              </div>
+            {/* Encabezado */}
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E]">
+                Colegio Ekirayá Montessori
+              </span>
+              <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif-editorial leading-tight">
+                Ingreso Institucional PIAR & DUA
+              </h1>
+              <p className="text-xs text-[#64748B] mt-0.5">
+                {isAdmin ? (
+                  <>
+                    Autenticación validada contra la pestaña{' '}
+                    <code className="font-mono-code text-teal-800">Usuarios_Perfiles</code>
+                  </>
+                ) : (
+                  'Plataforma Institucional de Educación Inclusiva • Decreto 1421 MEN'
+                )}
+              </p>
             </div>
 
             {/* Pestañas Login vs Crear Usuario en Hoja — Exclusivo Administrador */}

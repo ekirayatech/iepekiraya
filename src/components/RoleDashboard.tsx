@@ -21,10 +21,6 @@ import {
   SyncStatus,
   UserRole,
 } from '../types/piar';
-import {
-  EKIRAYA_LOGO_LOCAL_FALLBACK,
-  EKIRAYA_LOGO_URL,
-} from '../utils/exportUtils';
 
 interface RoleDashboardProps {
   activeRole: UserRole;
@@ -70,23 +66,10 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Encabezado contextual según el Rol activo con Logo Institucional */}
+      {/* Encabezado contextual según el Rol activo */}
       <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 sm:p-6 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-            <div className="bg-[#FBFBF9] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 flex items-center justify-center shrink-0 shadow-2xs self-start">
-              <img
-                src={EKIRAYA_LOGO_URL}
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
-                }}
-                alt="Colegio Ekirayá Montessori"
-                className="h-12 sm:h-14 w-auto object-contain"
-              />
-            </div>
-
-            <div className="space-y-1.5">
+          <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold tracking-wide uppercase ${roleProfile.badgeColor}`}
@@ -112,7 +95,6 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
                 {activeRole === 'profesor' &&
                   'Espacio pedagógico de aula: consulta de caracterizaciones estudiantiles, registro ágil de Indicadores Ajustados y Ajustes del Proceso por asignatura con apoyo del Banco DUA, y seguimiento de logros por periodo.'}
               </p>
-            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">

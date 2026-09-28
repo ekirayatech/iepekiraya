@@ -356,24 +356,13 @@ export const AuditPdfModal: React.FC<AuditPdfModalProps> = ({
       <div className="bg-[#F4F4F0] border border-[#CBD5E1] rounded-2xl w-full max-w-6xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Barra Superior de Acciones (No se imprime en el PDF) */}
         <div className="no-print bg-white border-b border-[#E2E8F0] px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <img
-              src={EKIRAYA_LOGO_URL}
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
-              }}
-              alt="Logo Colegio Ekirayá Montessori"
-              className="h-10 w-auto object-contain bg-white px-2 py-1 rounded-lg border border-[#E2E8F0] shadow-2xs shrink-0"
-            />
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-[#0F172A] font-serif-editorial">
-                Informe Oficial de Auditoría PIAR / Plan Excepcional (Descarga Directa .PDF)
-              </h2>
-              <p className="text-xs text-[#64748B]">
-                Carga tu firma previamente en formato <strong>.PNG</strong> y descarga el PDF Oficial con logo institucional y sello SHA-256
-              </p>
-            </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-[#0F172A] font-serif-editorial">
+              Informe Oficial de Auditoría PIAR / Plan Excepcional (Descarga Directa .PDF)
+            </h2>
+            <p className="text-xs text-[#64748B]">
+              Carga tu firma previamente en formato <strong>.PNG</strong> y descarga el PDF Oficial con logo institucional y sello SHA-256
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

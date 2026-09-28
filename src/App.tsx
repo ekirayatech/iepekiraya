@@ -1316,17 +1316,8 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* TOPBAR CON SELECTOR DE ROL PERSONALIZADO Y ACCIONES GLOBALES */}
         <header className="no-print bg-white border-b border-[#E2E8F0] px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30">
-          {/* Selector de Perfil / Rol de Usuario con Logo Institucional */}
+          {/* Selector de Perfil / Rol de Usuario */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <img
-              src={EKIRAYA_LOGO_URL}
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
-              }}
-              alt="Logo Colegio Ekirayá Montessori"
-              className="hidden sm:block h-7 w-auto object-contain mr-1"
-            />
             <span className="text-xs font-bold uppercase tracking-wider text-[#64748B] mr-1">
               Perfil Activo:
             </span>
