@@ -52,9 +52,15 @@ import {
 import {
   createEkirayaSpreadsheet,
   extractSpreadsheetId,
+  isAppsScriptUrl,
   pullDataFromSpreadsheet,
   pushAllDataToSpreadsheet,
 } from './services/googleSheetsService';
+import {
+  getAccessToken,
+  googleSignIn,
+  initAuth,
+} from './services/firebaseAuthService';
 import {
   EKIRAYA_LOGO_LOCAL_FALLBACK,
   EKIRAYA_LOGO_URL,
@@ -91,6 +97,7 @@ const STORAGE_CATEGORIAS_KEY = 'ekiraya_iep_categorias_v1';
 const STORAGE_USUARIOS_KEY = 'ekiraya_iep_usuarios_v1';
 const STORAGE_ACTIVE_USER_KEY = 'ekiraya_iep_active_user_v1';
 const STORAGE_SHEET_META_KEY = 'ekiraya_iep_sheet_meta_v1';
+const STORAGE_CUSTOM_CLIENT_ID_KEY = 'ekiraya_iep_custom_client_id_v1';
 const DEFAULT_OAUTH_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
   firebaseAppletConfig.oAuthClientId ||
@@ -208,10 +215,15 @@ export default function App() {
     }
   );
 
-  // Estado de OAuth y Google Sheets
-  const [accessToken, setAccessToken] = useState<string | null>(() =>
-    sessionStorage.getItem('ekiraya_google_token')
-  );
+  // Estado de OAuth en memoria (nunca en localStorage/sessionStorage) y Google Sheets
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [customClientId, setCustomClientId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_CUSTOM_CLIENT_ID_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [encryptionKey, setEncryptionKey] = useState<string>(
     'EKIRAYA-IEP-MEN-1421-COLOMBIA-2026-KEY'
   );
@@ -224,8 +236,9 @@ export default function App() {
     } catch {
       // ignore
     }
+    const connectedViaBridge = isAppsScriptUrl(savedSheet.id || '');
     return {
-      isConnectedToGoogle: Boolean(sessionStorage.getItem('ekiraya_google_token')),
+      isConnectedToGoogle: connectedViaBridge,
       spreadsheetId: savedSheet.id || '',
       spreadsheetUrl: savedSheet.url || '',
       spreadsheetTitle:
@@ -256,6 +269,24 @@ export default function App() {
       lastError: null,
     };
   });
+
+  // Inicializar listener de Firebase Auth con caché en memoria
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (_user, token) => {
+        setAccessToken(token);
+        setSyncStatus((prev) => ({
+          ...prev,
+          isConnectedToGoogle: true,
+          lastError: null,
+        }));
+      },
+      () => {
+        setAccessToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   // Bitácora de Auditoría
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
@@ -400,24 +431,28 @@ export default function App() {
         // ignore
       }
 
-      // 2. Si hay conexión activa con Google Sheets y un Spreadsheet vinculado, sincronizar cada 2s
-      if (accessToken && syncStatus.spreadsheetId) {
+      // 2. Si hay conexión activa con Google Sheets (OAuth o Puente Apps Script) y un Spreadsheet vinculado, sincronizar cada 2s
+      const canSyncNow =
+        Boolean(syncStatus.spreadsheetId) &&
+        (Boolean(accessToken) || isAppsScriptUrl(syncStatus.spreadsheetId));
+      if (canSyncNow) {
         try {
+          const activeToken = (await getAccessToken()) || accessToken || '';
           if (isDirtyForSheetsRef.current) {
             isDirtyForSheetsRef.current = false;
-              await pushAllDataToSpreadsheet(
-                accessToken,
-                syncStatus.spreadsheetId,
-                studentsRef.current,
-                bankRef.current,
-                encryptionKey,
-                cursosRef.current,
-                categoriasRef.current,
-                usuariosRef.current
-              );
+            await pushAllDataToSpreadsheet(
+              activeToken,
+              syncStatus.spreadsheetId,
+              studentsRef.current,
+              bankRef.current,
+              encryptionKey,
+              cursosRef.current,
+              categoriasRef.current,
+              usuariosRef.current
+            );
           } else if (!editorModalState.isOpen) {
             const remote = await pullDataFromSpreadsheet(
-              accessToken,
+              activeToken,
               syncStatus.spreadsheetId,
               encryptionKey
             );
@@ -482,89 +517,110 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, [accessToken, syncStatus.spreadsheetId, encryptionKey, editorModalState.isOpen]);
 
-  // Autenticación OAuth 2.0 con Google Identity Services (Client-Side)
-  const handleConnectGoogleOAuth = (autoCreateSheetAfterAuth: boolean = true) => {
-    const clientId = DEFAULT_OAUTH_CLIENT_ID;
-    if (!window.google?.accounts?.oauth2 || !clientId) {
+  const handleSaveCustomClientId = (newClientId: string) => {
+    setCustomClientId(newClientId);
+    try {
+      if (newClientId) {
+        localStorage.setItem(STORAGE_CUSTOM_CLIENT_ID_KEY, newClientId);
+      } else {
+        localStorage.removeItem(STORAGE_CUSTOM_CLIENT_ID_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Autenticación OAuth 2.0 con Firebase Auth (GoogleAuthProvider) o Client ID personalizado
+  const handleConnectGoogleOAuth = async (
+    autoCreateOrCustomClientId?: boolean | string
+  ) => {
+    const autoCreateSheetAfterAuth =
+      typeof autoCreateOrCustomClientId === 'boolean'
+        ? autoCreateOrCustomClientId
+        : true;
+    const overrideClientId =
+      typeof autoCreateOrCustomClientId === 'string'
+        ? autoCreateOrCustomClientId
+        : customClientId || DEFAULT_OAUTH_CLIENT_ID;
+
+    try {
+      const result = await googleSignIn(
+        overrideClientId !== firebaseAppletConfig.oAuthClientId
+          ? overrideClientId
+          : undefined
+      );
+      if (result?.accessToken) {
+        const token = result.accessToken;
+        setAccessToken(token);
+        setSyncStatus((prev) => ({
+          ...prev,
+          isConnectedToGoogle: true,
+          lastError: null,
+        }));
+        appendAuditLog('Conexión OAuth 2.0 establecida con Google Sheets API');
+
+        if (autoCreateSheetAfterAuth && !syncStatus.spreadsheetId) {
+          try {
+            const created = await createEkirayaSpreadsheet(
+              token,
+              studentsRef.current,
+              bankRef.current,
+              encryptionKey,
+              cursosRef.current,
+              categoriasRef.current,
+              usuariosRef.current
+            );
+            localStorage.setItem(
+              STORAGE_SHEET_META_KEY,
+              JSON.stringify({
+                id: created.spreadsheetId,
+                url: created.spreadsheetUrl,
+                title: created.title,
+              })
+            );
+            setSyncStatus((prev) => ({
+              ...prev,
+              isConnectedToGoogle: true,
+              spreadsheetId: created.spreadsheetId,
+              spreadsheetUrl: created.spreadsheetUrl,
+              spreadsheetTitle: created.title,
+              lastError: null,
+            }));
+            appendAuditLog(
+              `Hoja de cálculo creada en Google Drive (${created.spreadsheetId})`
+            );
+          } catch (err) {
+            setSyncStatus((prev) => ({
+              ...prev,
+              lastError:
+                err instanceof Error
+                  ? err.message
+                  : 'Autenticado, pero ocurrió un error al crear la hoja automáticamente.',
+            }));
+          }
+        }
+      }
+    } catch (err) {
       setSyncStatus((prev) => ({
         ...prev,
         lastError:
-          'El cliente OAuth de Google se está inicializando. Por favor intenta de nuevo en unos segundos.',
+          err instanceof Error
+            ? err.message
+            : 'No fue posible completar la autenticación con Google OAuth 2.0.',
       }));
-      return;
     }
-
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/spreadsheets',
-      callback: async (tokenResponse) => {
-        if (tokenResponse.access_token) {
-          const token = tokenResponse.access_token;
-          setAccessToken(token);
-          sessionStorage.setItem('ekiraya_google_token', token);
-          setSyncStatus((prev) => ({
-            ...prev,
-            isConnectedToGoogle: true,
-            lastError: null,
-          }));
-          appendAuditLog('Conexión OAuth 2.0 establecida con Google Sheets API');
-
-          if (autoCreateSheetAfterAuth && !syncStatus.spreadsheetId) {
-            try {
-              const created = await createEkirayaSpreadsheet(
-                token,
-                studentsRef.current,
-                bankRef.current,
-                encryptionKey,
-                cursosRef.current,
-                categoriasRef.current,
-                usuariosRef.current
-              );
-              localStorage.setItem(
-                STORAGE_SHEET_META_KEY,
-                JSON.stringify({
-                  id: created.spreadsheetId,
-                  url: created.spreadsheetUrl,
-                  title: created.title,
-                })
-              );
-              setSyncStatus((prev) => ({
-                ...prev,
-                isConnectedToGoogle: true,
-                spreadsheetId: created.spreadsheetId,
-                spreadsheetUrl: created.spreadsheetUrl,
-                spreadsheetTitle: created.title,
-                lastError: null,
-              }));
-              appendAuditLog(
-                `Hoja de cálculo creada en Google Drive (${created.spreadsheetId})`
-              );
-            } catch (err) {
-              setSyncStatus((prev) => ({
-                ...prev,
-                lastError:
-                  err instanceof Error
-                    ? err.message
-                    : 'Autenticado, pero ocurrió un error al crear la hoja automáticamente.',
-              }));
-            }
-          }
-        }
-      },
-    });
-
-    tokenClient.requestAccessToken({ prompt: 'consent' });
   };
 
-  // Crear nueva Hoja de Cálculo Google Sheets con las 5 pestañas de Ekirayá IEP
+  // Crear nueva Hoja de Cálculo Google Sheets con las 8 pestañas de Ekirayá IEP
   const handleCreateNewGoogleSheet = async () => {
-    if (!accessToken) {
-      handleConnectGoogleOAuth(true);
+    const activeToken = (await getAccessToken()) || accessToken;
+    if (!activeToken) {
+      await handleConnectGoogleOAuth(true);
       return;
     }
     try {
       const created = await createEkirayaSpreadsheet(
-        accessToken,
+        activeToken,
         students,
         adjustmentBank,
         encryptionKey,
@@ -599,33 +655,59 @@ export default function App() {
     }
   };
 
-  // Vincular un Google Sheet existente
+  // Vincular un Google Sheet existente o una URL de Puente Google Apps Script (/exec)
   const handleConnectExistingSheet = async (sheetIdOrUrl: string) => {
     const extractedId = extractSpreadsheetId(sheetIdOrUrl);
-    const url = `https://docs.google.com/spreadsheets/d/${extractedId}/edit`;
+    const usingBridge = isAppsScriptUrl(extractedId);
+    const url = usingBridge
+      ? extractedId
+      : `https://docs.google.com/spreadsheets/d/${extractedId}/edit`;
+    const titleLabel = usingBridge
+      ? 'Google Sheet Conectado vía Puente Apps Script (Sin OAuth)'
+      : `Google Sheet Institucional (${extractedId.slice(0, 8)}...)`;
+
     localStorage.setItem(
       STORAGE_SHEET_META_KEY,
       JSON.stringify({
         id: extractedId,
         url,
-        title: `Google Sheet Institucional (${extractedId.slice(0, 8)}...)`,
+        title: titleLabel,
       })
     );
     setSyncStatus((prev) => ({
       ...prev,
+      isConnectedToGoogle: usingBridge ? true : prev.isConnectedToGoogle,
       spreadsheetId: extractedId,
       spreadsheetUrl: url,
-      spreadsheetTitle: `Google Sheet Institucional (${extractedId.slice(0, 8)}...)`,
+      spreadsheetTitle: titleLabel,
       lastError: null,
     }));
 
-    if (accessToken) {
+    const activeToken = (await getAccessToken()) || accessToken || '';
+    if (activeToken || usingBridge) {
       try {
         const remote = await pullDataFromSpreadsheet(
-          accessToken,
+          activeToken,
           extractedId,
           encryptionKey
         );
+        if (remote.spreadsheetUrl || remote.spreadsheetTitle) {
+          const resolvedUrl = remote.spreadsheetUrl || url;
+          const resolvedTitle = remote.spreadsheetTitle || titleLabel;
+          localStorage.setItem(
+            STORAGE_SHEET_META_KEY,
+            JSON.stringify({
+              id: extractedId,
+              url: resolvedUrl,
+              title: resolvedTitle,
+            })
+          );
+          setSyncStatus((prev) => ({
+            ...prev,
+            spreadsheetUrl: resolvedUrl,
+            spreadsheetTitle: resolvedTitle,
+          }));
+        }
         if (remote.usuariosCatalog && remote.usuariosCatalog.length > 0) {
           setUsuariosCatalog(remote.usuariosCatalog);
           localStorage.setItem(STORAGE_USUARIOS_KEY, JSON.stringify(remote.usuariosCatalog));
@@ -633,26 +715,44 @@ export default function App() {
         if (remote.students && remote.students.length > 0) {
           setStudents(remote.students);
           localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(remote.students));
-        } else {
+        }
+        if (
+          !remote.students ||
+          remote.students.length === 0 ||
+          !remote.usuariosCatalog ||
+          remote.usuariosCatalog.length === 0
+        ) {
           await pushAllDataToSpreadsheet(
-            accessToken,
+            activeToken,
             extractedId,
-            students,
-            adjustmentBank,
+            remote.students && remote.students.length > 0 ? remote.students : students,
+            remote.adjustmentBank && remote.adjustmentBank.length > 0
+              ? remote.adjustmentBank
+              : adjustmentBank,
             encryptionKey,
-            cursosCatalog,
-            categoriasCatalog,
-            usuariosCatalog
+            remote.cursosCatalog && remote.cursosCatalog.length > 0
+              ? remote.cursosCatalog
+              : cursosCatalog,
+            remote.categoriasCatalog && remote.categoriasCatalog.length > 0
+              ? remote.categoriasCatalog
+              : categoriasCatalog,
+            remote.usuariosCatalog && remote.usuariosCatalog.length > 0
+              ? remote.usuariosCatalog
+              : usuariosCatalog
           );
         }
-        appendAuditLog(`Vinculado y sincronizado Google Sheet ID: ${extractedId}`);
+        appendAuditLog(
+          usingBridge
+            ? 'Vinculado y sincronizado Google Sheet mediante Puente Apps Script (Sin OAuth)'
+            : `Vinculado y sincronizado Google Sheet ID: ${extractedId}`
+        );
       } catch (err) {
         setSyncStatus((prev) => ({
           ...prev,
           lastError:
             err instanceof Error
               ? err.message
-              : 'Verifica que el Sheet tenga las pestañas de Ekirayá IEP o permisos de edición.',
+              : 'Verifica que el Sheet o Puente Apps Script tenga permisos de edición.',
         }));
       }
     }
@@ -665,10 +765,14 @@ export default function App() {
       isSyncingNow: true,
       lastSyncTimestamp: new Date().toLocaleTimeString('es-CO'),
     }));
-    if (accessToken && syncStatus.spreadsheetId) {
+    const activeToken = (await getAccessToken()) || accessToken || '';
+    const canSync =
+      Boolean(syncStatus.spreadsheetId) &&
+      (Boolean(activeToken) || isAppsScriptUrl(syncStatus.spreadsheetId));
+    if (canSync) {
       try {
         await pushAllDataToSpreadsheet(
-          accessToken,
+          activeToken,
           syncStatus.spreadsheetId,
           students,
           adjustmentBank,
@@ -1870,8 +1974,10 @@ export default function App() {
           students={students}
           encryptionKey={encryptionKey}
           auditLogs={auditLogs}
+          customClientId={customClientId}
+          onSaveCustomClientId={handleSaveCustomClientId}
           onClose={() => setIsSheetsModalOpen(false)}
-          onConnectGoogleOAuth={handleConnectGoogleOAuth}
+          onConnectGoogleOAuth={(overrideId) => handleConnectGoogleOAuth(overrideId || true)}
           onCreateNewGoogleSheet={handleCreateNewGoogleSheet}
           onConnectExistingSheet={handleConnectExistingSheet}
           onForceManualSync={handleForceManualSync}
@@ -1899,6 +2005,8 @@ export default function App() {
           onAddUserAndLogin={handleAddUserAndLogin}
           onConnectGoogleOAuth={() => handleConnectGoogleOAuth(true)}
           onForceSyncSheets={handleForceManualSync}
+          onConnectAppsScriptUrl={handleConnectExistingSheet}
+          onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
           onCancel={() => setIsLoginModalOpen(false)}
         />
       )}

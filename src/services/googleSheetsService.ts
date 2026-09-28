@@ -49,14 +49,120 @@ export const EKIRAYA_REQUIRED_SHEETS = [
   { title: 'Usuarios_Perfiles', rowCount: 300, columnCount: 11 },
 ];
 
+export function isAppsScriptUrl(input: string): boolean {
+  const trimmed = (input || '').trim();
+  return (
+    trimmed.startsWith('https://script.google.com/macros/s/') ||
+    trimmed.startsWith('https://script.googleusercontent.com/')
+  );
+}
+
 export function extractSpreadsheetId(input: string): string {
   const trimmed = input.trim();
+  if (isAppsScriptUrl(trimmed)) {
+    return trimmed;
+  }
   const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (match && match[1]) {
     return match[1];
   }
   return trimmed;
 }
+
+export const EKIRAYA_APPS_SCRIPT_CODE = `// ============================================================================
+// SOLUCIÓN B: PUENTE GOOGLE SHEETS SIN OAUTH — COLEGIO EKIRAYÁ MONTESSORI
+// ============================================================================
+// INSTRUCCIONES PASO A PASO (Funciona en Vercel y cualquier dominio sin bloqueos):
+// 1. Abre tu archivo de Google Sheets -> menú "Extensiones" -> "Apps Script".
+// 2. Borra el código que aparece por defecto y pega TODO este código.
+// 3. Haz clic en el ícono de Guardar (💾) y arriba haz clic en "Implementar" -> "Nueva implementación".
+// 4. Haz clic en el engranaje (⚙️) junto a "Seleccionar tipo" y elige "Aplicación web":
+//    - Descripción: "Puente PIAR DUA Ekirayá"
+//    - Ejecutar como: "Yo" (tu correo)
+//    - Quién tiene acceso: "Cualquier persona" (Importante para permitir sincronización CORS)
+// 5. Haz clic en "Implementar", autoriza el acceso a tu hoja y copia la "URL de la aplicación web"
+//    (termina en /exec). Pégala en el sistema Ekirayá y pulsa "Vincular".
+// ============================================================================
+
+const REQUIRED_SHEETS = [
+  'PIAR_Estudiantes',
+  'Adecuaciones_Asignaturas',
+  'Seguimiento_Periodos',
+  'Historial_Anual',
+  'Banco_Ajustes',
+  'Tabla_Cursos_Anios',
+  'Tabla_Categorias_SIMAT',
+  'Usuarios_Perfiles'
+];
+
+function inicializar8HojasEkiraya() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSheets(ss);
+  return '8 hojas oficiales PIAR & DUA verificadas correctamente en: ' + ss.getName();
+}
+
+function ensureSheets(ss) {
+  REQUIRED_SHEETS.forEach(function(title) {
+    var sheet = ss.getSheetByName(title);
+    if (!sheet) {
+      sheet = ss.insertSheet(title);
+      sheet.setFrozenRows(1);
+    }
+  });
+}
+
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSheets(ss);
+  var readTabs = [
+    'PIAR_Estudiantes',
+    'Banco_Ajustes',
+    'Tabla_Cursos_Anios',
+    'Tabla_Categorias_SIMAT',
+    'Usuarios_Perfiles'
+  ];
+  var valueRanges = readTabs.map(function(tabName) {
+    var sheet = ss.getSheetByName(tabName);
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    var values = (lastRow > 1 && lastCol > 0)
+      ? sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues()
+      : [];
+    return { range: tabName, values: values };
+  });
+  return ContentService.createTextOutput(JSON.stringify({
+    ok: true,
+    spreadsheetId: ss.getId(),
+    spreadsheetUrl: ss.getUrl(),
+    title: ss.getName(),
+    valueRanges: valueRanges
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSheets(ss);
+  var payload = JSON.parse(e.postData.contents || '{}');
+  var dataList = payload.data || [];
+  dataList.forEach(function(item) {
+    var sheetName = String(item.range || '').split('!')[0];
+    var rows = item.values || [];
+    var sheet = ss.getSheetByName(sheetName);
+    if (sheet && rows.length > 0) {
+      sheet.clearContents();
+      sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      var headerRange = sheet.getRange(1, 1, 1, rows[0].length);
+      headerRange.setBackground('#0F766E').setFontColor('#FFFFFF').setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+  });
+  return ContentService.createTextOutput(JSON.stringify({
+    ok: true,
+    spreadsheetId: ss.getId(),
+    spreadsheetUrl: ss.getUrl(),
+    title: ss.getName()
+  })).setMimeType(ContentService.MimeType.JSON);
+}`;
 
 /**
  * Verifica que las 8 pestañas oficiales (incluyendo Tabla_Cursos_Anios, Tabla_Categorias_SIMAT y Usuarios_Perfiles)
@@ -191,8 +297,11 @@ export async function pushAllDataToSpreadsheet(
   categoriasCatalog: CategoriaSimatCatalogItem[] = TABLA_CATEGORIAS_SIMAT_INICIAL,
   usuariosCatalog: UsuarioPerfilCatalogItem[] = TABLA_USUARIOS_PERFILES_INICIAL
 ): Promise<void> {
-  // Asegurar que las 8 pestañas existan (incluyendo Usuarios_Perfiles)
-  await ensureRequiredSheetsExist(accessToken, spreadsheetId);
+  const usingAppsScript = isAppsScriptUrl(spreadsheetId);
+  if (!usingAppsScript) {
+    // Asegurar que las 8 pestañas existan (incluyendo Usuarios_Perfiles)
+    await ensureRequiredSheetsExist(accessToken, spreadsheetId);
+  }
 
   // 1. Construir filas de PIAR_Estudiantes con Diagnóstico Cifrado AES-256-GCM
   const studentRows: string[][] = [
@@ -459,7 +568,6 @@ export async function pushAllDataToSpreadsheet(
     ]);
   }
 
-  const batchUpdateUrl = `${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`;
   const body = {
     valueInputOption: 'RAW',
     data: [
@@ -474,6 +582,21 @@ export async function pushAllDataToSpreadsheet(
     ],
   };
 
+  if (usingAppsScript) {
+    const res = await fetch(spreadsheetId, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`Error al sincronizar mediante Puente Apps Script (${res.status})`);
+    }
+    return;
+  }
+
+  const batchUpdateUrl = `${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`;
   const res = await fetch(batchUpdateUrl, {
     method: 'POST',
     headers: {
@@ -503,40 +626,54 @@ export async function pullDataFromSpreadsheet(
   cursosCatalog: CursoAnioCatalogItem[] | null;
   categoriasCatalog: CategoriaSimatCatalogItem[] | null;
   usuariosCatalog: UsuarioPerfilCatalogItem[] | null;
+  spreadsheetUrl?: string;
+  spreadsheetTitle?: string;
 }> {
-  const rangesQuery = [
-    'ranges=PIAR_Estudiantes!A2:O500',
-    'ranges=Banco_Ajustes!A2:I500',
-    'ranges=Tabla_Cursos_Anios!A2:H500',
-    'ranges=Tabla_Categorias_SIMAT!A2:I500',
-    'ranges=Usuarios_Perfiles!A2:K300',
-  ].join('&');
+  let data: {
+    valueRanges?: { values?: string[][] }[];
+    spreadsheetUrl?: string;
+    title?: string;
+  } = {};
 
-  const batchGetUrl = `${SHEETS_API_BASE}/${spreadsheetId}/values:batchGet?${rangesQuery}`;
-  const res = await fetch(batchGetUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!res.ok) {
-    if (res.status === 400) {
-      // Si la hoja vinculada aún no tiene creadas las pestañas nuevas (Tabla_Cursos_Anios, Tabla_Categorias_SIMAT o Usuarios_Perfiles),
-      // aseguramos que se creen en segundo plano y retornamos null para poblarlas.
-      await ensureRequiredSheetsExist(accessToken, spreadsheetId);
-      return {
-        students: null,
-        adjustmentBank: null,
-        cursosCatalog: null,
-        categoriasCatalog: null,
-        usuariosCatalog: null,
-      };
+  if (isAppsScriptUrl(spreadsheetId)) {
+    const res = await fetch(spreadsheetId, { method: 'GET' });
+    if (!res.ok) {
+      throw new Error(`Error al leer desde Puente Apps Script (${res.status})`);
     }
-    const errText = await res.text();
-    throw new Error(`Error al leer Google Sheet (${res.status}): ${errText}`);
-  }
+    data = await res.json();
+  } else {
+    const rangesQuery = [
+      'ranges=PIAR_Estudiantes!A2:O500',
+      'ranges=Banco_Ajustes!A2:I500',
+      'ranges=Tabla_Cursos_Anios!A2:H500',
+      'ranges=Tabla_Categorias_SIMAT!A2:I500',
+      'ranges=Usuarios_Perfiles!A2:K300',
+    ].join('&');
 
-  const data = await res.json();
+    const batchGetUrl = `${SHEETS_API_BASE}/${spreadsheetId}/values:batchGet?${rangesQuery}`;
+    const res = await fetch(batchGetUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      if (res.status === 400) {
+        await ensureRequiredSheetsExist(accessToken, spreadsheetId);
+        return {
+          students: null,
+          adjustmentBank: null,
+          cursosCatalog: null,
+          categoriasCatalog: null,
+          usuariosCatalog: null,
+        };
+      }
+      const errText = await res.text();
+      throw new Error(`Error al leer Google Sheet (${res.status}): ${errText}`);
+    }
+
+    data = await res.json();
+  }
   const valueRanges = data.valueRanges || [];
   const rawStudentRows: string[][] = valueRanges[0]?.values || [];
   const rawBankRows: string[][] = valueRanges[1]?.values || [];
@@ -710,5 +847,7 @@ export async function pullDataFromSpreadsheet(
     cursosCatalog: parsedCursos.length > 0 ? parsedCursos : null,
     categoriasCatalog: parsedCategorias.length > 0 ? parsedCategorias : null,
     usuariosCatalog: parsedUsuarios.length > 0 ? parsedUsuarios : null,
+    spreadsheetUrl: data.spreadsheetUrl,
+    spreadsheetTitle: data.title,
   };
 }
