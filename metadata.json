@@ -1,0 +1,6 @@
+{
+  "name": "Ekirayá IEP",
+  "description": "Sistema de Gestión de PIAR, DUA y Talentos Excepcionales bajo normativa educativa colombiana (Decreto 1421 de 2017) sincronizado en tiempo real con Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
