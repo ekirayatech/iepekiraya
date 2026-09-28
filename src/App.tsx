@@ -991,6 +991,18 @@ export default function App() {
     handleLoginSuccess(newUser);
   };
 
+  const handleLogout = () => {
+    const previousUser = currentUser?.correoInstitucional || currentUser?.nombresApellidos || 'Usuario';
+    setCurrentUser(null);
+    try {
+      sessionStorage.removeItem(STORAGE_ACTIVE_USER_KEY);
+    } catch {
+      // ignore
+    }
+    setIsLoginModalOpen(true);
+    appendAuditLog(`Cierre de sesión institucional (${previousUser})`);
+  };
+
   const handleApplyAdjustmentToStudent = (
     studentId: string,
     item: AjusteRazonableItem
@@ -1312,20 +1324,25 @@ export default function App() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer shadow-2xs"
               title="Abrir Formulario de Inicio de Sesión o cambiar de usuario institucional"
             >
-              {currentUser ? (
-                <>
-                  <LogOut className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>
-                    {currentUser.username} ({currentUser.rol}) • Cambiar Login
-                  </span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Formulario de Login</span>
-                </>
-              )}
+              <LogIn className="w-3.5 h-3.5 text-emerald-400" />
+              <span>
+                {currentUser
+                  ? `${currentUser.username} (${currentUser.rol})`
+                  : 'Iniciar Sesión'}
+              </span>
             </button>
+
+            {currentUser && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer shadow-2xs"
+                title="Cerrar sesión activa y volver al formulario de ingreso"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Cerrar Sesión</span>
+              </button>
+            )}
           </div>
 
           {/* Botones Rápidos de Firma .PNG, Base de Datos, Excel y Nuevo PIAR */}
@@ -2000,14 +2017,16 @@ export default function App() {
       {isLoginModalOpen && (
         <LoginView
           usuariosCatalog={usuariosCatalog}
+          currentUser={currentUser}
           syncStatus={syncStatus}
           onLoginSuccess={handleLoginSuccess}
           onAddUserAndLogin={handleAddUserAndLogin}
+          onLogout={handleLogout}
           onConnectGoogleOAuth={() => handleConnectGoogleOAuth(true)}
           onForceSyncSheets={handleForceManualSync}
           onConnectAppsScriptUrl={handleConnectExistingSheet}
           onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
-          onCancel={() => setIsLoginModalOpen(false)}
+          onCancel={currentUser ? () => setIsLoginModalOpen(false) : undefined}
         />
       )}
     </div>

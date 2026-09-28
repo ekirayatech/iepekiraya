@@ -14,6 +14,7 @@ import {
   AlertCircle,
   UserPlus,
   LogIn,
+  LogOut,
   X,
   Code2,
   Copy,
@@ -27,9 +28,11 @@ import { EKIRAYA_APPS_SCRIPT_CODE, isAppsScriptUrl } from '../services/googleShe
 
 interface LoginViewProps {
   usuariosCatalog: UsuarioPerfilCatalogItem[];
+  currentUser?: UsuarioPerfilCatalogItem | null;
   syncStatus: SyncStatus;
   onLoginSuccess: (user: UsuarioPerfilCatalogItem) => void;
   onAddUserAndLogin: (newUser: UsuarioPerfilCatalogItem) => void;
+  onLogout?: () => void;
   onConnectGoogleOAuth: () => void;
   onForceSyncSheets: () => Promise<void>;
   onConnectAppsScriptUrl?: (scriptUrl: string) => Promise<void>;
@@ -39,23 +42,24 @@ interface LoginViewProps {
 
 export const LoginView: React.FC<LoginViewProps> = ({
   usuariosCatalog,
+  currentUser,
   syncStatus,
   onLoginSuccess,
   onAddUserAndLogin,
+  onLogout,
   onForceSyncSheets,
   onConnectAppsScriptUrl,
   onOpenSheetsModal,
   onCancel,
 }) => {
-  const [identifier, setIdentifier] = useState('mebolanos@cem.edu.co');
-  const [password, setPassword] = useState('Ekiraya2026*');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [logoutToast, setLogoutToast] = useState<string | null>(null);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showSolutionBPanel, setShowSolutionBPanel] = useState(
-    !syncStatus.spreadsheetId || !isAppsScriptUrl(syncStatus.spreadsheetId)
-  );
+  const [showSolutionBPanel, setShowSolutionBPanel] = useState(false);
   const [scriptUrlInput, setScriptUrlInput] = useState(
     isAppsScriptUrl(syncStatus.spreadsheetId) ? syncStatus.spreadsheetId : ''
   );
@@ -85,6 +89,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
+  const handleLogoutClick = () => {
+    if (onLogout) {
+      onLogout();
+      setIdentifier('');
+      setPassword('');
+      setErrorMsg(null);
+      setLogoutToast('Has cerrado sesión correctamente. Ingresa tus credenciales para continuar.');
+    }
+  };
+
   // Campos de registro rápido en hoja Usuarios_Perfiles
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -97,6 +111,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setLogoutToast(null);
 
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = password.trim();
@@ -116,7 +131,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     if (!matchedUser) {
       setErrorMsg(
-        'Credenciales no válidas o usuario inactivo en la hoja Usuarios_Perfiles. Verifica tu correo/usuario y clave o selecciona un perfil de la tabla.'
+        'Credenciales no válidas o usuario inactivo en la hoja Usuarios_Perfiles. Verifica tu correo/usuario y contraseña.'
       );
       return;
     }
@@ -125,18 +140,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
       ...matchedUser,
       ultimoAcceso: new Date().toISOString().slice(0, 10),
     });
-  };
-
-  const handleQuickSelectUser = (user: UsuarioPerfilCatalogItem, immediateLogin: boolean = false) => {
-    setIdentifier(user.correoInstitucional);
-    setPassword(user.claveAcceso);
-    setErrorMsg(null);
-    if (immediateLogin) {
-      onLoginSuccess({
-        ...user,
-        ultimoAcceso: new Date().toISOString().slice(0, 10),
-      });
-    }
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
@@ -216,17 +219,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-[#FBFBF9] border border-[#CBD5E1] rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden my-auto">
+      <div className="bg-[#FBFBF9] border border-[#CBD5E1] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden my-auto">
         {/* Barra Superior Institucional */}
         <div className="bg-[#0F172A] text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/90 border border-emerald-700 text-emerald-300 text-xs font-semibold">
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              Hoja Google Sheets: Usuarios_Perfiles ({usuariosCatalog.length} registrados)
-            </span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-300">
-              <Lock className="w-3.5 h-3.5 text-teal-400" />
-              Protección Ley 1581 de 2012 • Decreto 1421 MEN
+              Hoja: Usuarios_Perfiles
             </span>
           </div>
 
@@ -235,32 +234,43 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <button
                 type="button"
                 onClick={handleSyncClick}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-800 hover:bg-teal-700 text-white text-xs font-semibold transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-700 text-white text-xs font-semibold transition cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                Sincronizar Usuarios_Perfiles (2s)
+                Sync (2s)
               </button>
             )}
 
             <button
               type="button"
               onClick={() => setShowSolutionBPanel(!showSolutionBPanel)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition cursor-pointer"
             >
               <Code2 className="w-3.5 h-3.5" />
-              {showSolutionBPanel
-                ? 'Ocultar Solución B (Apps Script) ▲'
-                : 'Solución B: Conectar Sheets sin OAuth ▼'}
+              {showSolutionBPanel ? 'Ocultar Apps Script ▲' : 'Conectar Sheets (Sin OAuth) ▼'}
             </button>
 
             {onOpenSheetsModal && (
               <button
                 type="button"
                 onClick={onOpenSheetsModal}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
+                title="Abrir configuración completa de Google Sheets"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                Panel Completo Sheets
+                Sheets
+              </button>
+            )}
+
+            {currentUser && onLogout && (
+              <button
+                type="button"
+                onClick={handleLogoutClick}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold transition cursor-pointer"
+                title="Cerrar sesión activa"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Cerrar Sesión
               </button>
             )}
 
@@ -286,19 +296,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   SOLUCIÓN B (SIN OAUTH)
                 </span>
                 <span className="font-bold text-indigo-950">
-                  Conecta tu Google Sheet en Vercel o aquí sin error de política OAuth 2.0:
+                  Conecta tu Google Sheet sin error OAuth 2.0:
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <a
                   href="https://sheets.new"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold cursor-pointer"
                 >
                   <FileSpreadsheet className="w-3 h-3" />
-                  1. Abrir Google Sheet (sheets.new)
+                  1. Abrir Sheet
                   <ExternalLink className="w-3 h-3" />
                 </a>
                 <button
@@ -307,16 +317,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-bold cursor-pointer"
                 >
                   {copiedCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  {copiedCode
-                    ? '¡Código Copiado! Pégalo en Extensiones → Apps Script'
-                    : '2. Copiar Código Apps Script (8 Hojas)'}
+                  {copiedCode ? '¡Código Copiado!' : '2. Copiar Apps Script'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCodePreview(!showCodePreview)}
                   className="px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-900 text-[11px] font-semibold hover:bg-indigo-100 cursor-pointer"
                 >
-                  {showCodePreview ? 'Ocultar Código ▲' : 'Ver Código ▼'}
+                  {showCodePreview ? 'Ocultar ▲' : 'Ver Código ▼'}
                 </button>
               </div>
             </div>
@@ -338,18 +346,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="text"
                   value={scriptUrlInput}
                   onChange={(e) => setScriptUrlInput(e.target.value)}
-                  placeholder="3. Pega aquí la URL de Aplicación Web (https://script.google.com/macros/s/.../exec)"
+                  placeholder="3. Pega aquí la URL (https://script.google.com/macros/s/.../exec)"
                   className="flex-1 px-3 py-1.5 rounded-lg border border-indigo-300 bg-white text-xs font-mono-code text-slate-900 focus:outline-none focus:border-indigo-700"
                 />
                 <button
                   type="submit"
                   disabled={linkingBridge || !scriptUrlInput.trim()}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50 shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50 shrink-0"
                 >
                   <Link2 className="w-3.5 h-3.5" />
-                  {linkingBridge
-                    ? 'Sincronizando 8 Hojas...'
-                    : 'Vincular y Crear 8 Hojas (Sin OAuth)'}
+                  {linkingBridge ? 'Sincronizando...' : 'Vincular 8 Hojas'}
                 </button>
               </form>
             )}
@@ -368,7 +374,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
               <span>
-                <strong>Aviso Google OAuth:</strong> {syncStatus.lastError}
+                <strong>Aviso Google Sheets:</strong> {syncStatus.lastError}
               </span>
             </div>
             {onOpenSheetsModal && (
@@ -377,341 +383,289 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 onClick={onOpenSheetsModal}
                 className="px-2.5 py-1 rounded-md bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold shrink-0 cursor-pointer"
               >
-                Abrir Solución (Puente Apps Script / Origen JS) →
+                Configurar Puente →
               </button>
             )}
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12">
-          {/* COLUMNA IZQUIERDA: FORMULARIO DE LOGIN / REGISTRO */}
-          <div className="lg:col-span-6 p-6 sm:p-8 bg-white border-b lg:border-b-0 lg:border-r border-[#E2E8F0] flex flex-col justify-between">
-            <div className="space-y-5">
-              {/* Logo y Encabezado */}
-              <div className="flex items-center gap-3.5">
-                <div className="bg-white border border-[#CBD5E1] rounded-xl px-3 py-2 shadow-2xs shrink-0">
-                  <img
-                    src={EKIRAYA_LOGO_URL}
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
-                    }}
-                    alt="Logo Colegio Ekirayá Montessori"
-                    className="h-12 w-auto object-contain"
-                  />
+        {/* FORMULARIO DE LOGIN / REGISTRO Y CONTROL DE SESIÓN */}
+        <div className="p-6 sm:p-8 bg-white flex flex-col justify-between">
+          <div className="space-y-5">
+            {/* Banner de Sesión Activa con botón de Cerrar Sesión */}
+            {currentUser && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-[#CBD5E1] flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
+                    Sesión Activa Actualmente
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                      {currentUser.nombresApellidos}
+                    </span>
+                    {roleBadge(currentUser.rol)}
+                  </div>
+                  <div className="text-[11px] font-mono-code text-[#475569]">
+                    {currentUser.correoInstitucional}
+                  </div>
                 </div>
+
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={handleLogoutClick}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-2xs transition cursor-pointer shrink-0"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Cerrar Sesión
+                  </button>
+                )}
+              </div>
+            )}
+
+            {logoutToast && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>{logoutToast}</span>
+              </div>
+            )}
+
+            {/* Logo y Encabezado */}
+            <div className="flex items-center gap-3.5">
+              <div className="bg-white border border-[#CBD5E1] rounded-xl px-3 py-2 shadow-2xs shrink-0">
+                <img
+                  src={EKIRAYA_LOGO_URL}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = EKIRAYA_LOGO_LOCAL_FALLBACK;
+                  }}
+                  alt="Logo Colegio Ekirayá Montessori"
+                  className="h-12 w-auto object-contain"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E]">
+                  Colegio Ekirayá Montessori
+                </span>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif-editorial leading-tight">
+                  Ingreso Institucional PIAR & DUA
+                </h1>
+                <p className="text-xs text-[#64748B] mt-0.5">
+                  Autenticación validada contra la pestaña <code className="font-mono-code text-teal-800">Usuarios_Perfiles</code>
+                </p>
+              </div>
+            </div>
+
+            {/* Pestañas Login vs Crear Usuario en Hoja */}
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#F4F4F0] border border-[#CBD5E1]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegisterMode(false);
+                  setErrorMsg(null);
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  !isRegisterMode
+                    ? 'bg-[#0F766E] text-white shadow-2xs'
+                    : 'text-[#475569] hover:text-[#0F172A]'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                Iniciar Sesión
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegisterMode(true);
+                  setErrorMsg(null);
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  isRegisterMode
+                    ? 'bg-[#0F766E] text-white shadow-2xs'
+                    : 'text-[#475569] hover:text-[#0F172A]'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Registrar en Usuarios_Perfiles
+              </button>
+            </div>
+
+            {errorMsg && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {!isRegisterMode ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#0F766E]">
-                    Colegio Ekirayá Montessori
-                  </span>
-                  <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] font-serif-editorial leading-tight">
-                    Ingreso Institucional PIAR & DUA
-                  </h1>
-                  <p className="text-xs text-[#64748B] mt-0.5">
-                    Autenticación validada contra la pestaña <code className="font-mono-code text-teal-800">Usuarios_Perfiles</code>
-                  </p>
+                  <label className="block text-xs font-bold text-[#334155] mb-1.5">
+                    Correo Institucional o Nombre de Usuario *
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      required
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder="Ej. usuario@cem.edu.co"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Pestañas Login vs Crear Usuario en Hoja */}
-              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#F4F4F0] border border-[#CBD5E1]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegisterMode(false);
-                    setErrorMsg(null);
-                  }}
-                  className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                    !isRegisterMode
-                      ? 'bg-[#0F766E] text-white shadow-2xs'
-                      : 'text-[#475569] hover:text-[#0F172A]'
-                  }`}
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  Iniciar Sesión
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegisterMode(true);
-                    setErrorMsg(null);
-                  }}
-                  className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                    isRegisterMode
-                      ? 'bg-[#0F766E] text-white shadow-2xs'
-                      : 'text-[#475569] hover:text-[#0F172A]'
-                  }`}
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Registrar en Usuarios_Perfiles
-                </button>
-              </div>
-
-              {errorMsg && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <span>{errorMsg}</span>
+                <div>
+                  <label className="block text-xs font-bold text-[#334155] mb-1.5">
+                    Contraseña / Clave de Acceso *
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Ingresa tu clave institucional"
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm font-mono-code text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {!isRegisterMode ? (
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 rounded-xl bg-[#0F766E] hover:bg-[#115E59] text-white text-sm font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Ingresar al Sistema PIAR • DUA
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-[#334155] mb-1.5">
-                      Correo Institucional o Nombre de Usuario *
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      Nombres y Apellidos *
                     </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        required
-                        value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder="Ej. mebolanos@cem.edu.co o mebolanos"
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      placeholder="Ej. Lic. Camilo Pardo"
+                      className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
+                    />
                   </div>
-
                   <div>
-                    <label className="block text-xs font-bold text-[#334155] mb-1.5">
-                      Contraseña / Clave de Acceso *
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      Perfil / Rol en el Sistema *
                     </label>
-                    <div className="relative">
-                      <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Ingresa tu clave institucional"
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm font-mono-code text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
-                      >
-                        {showPassword ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
+                    <select
+                      value={regRole}
+                      onChange={(e) => setRegRole(e.target.value as UserRole)}
+                      className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs bg-white font-semibold"
+                    >
+                      <option value="administrador">Administrador Institucional</option>
+                      <option value="psicologa">Profesional Psicóloga / Orientación</option>
+                      <option value="profesor">Profesor de Aula / Área</option>
+                    </select>
                   </div>
+                </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-3 px-4 rounded-xl bg-[#0F766E] hover:bg-[#115E59] text-white text-sm font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <LogIn className="w-4 h-4" />
-                    Ingresar al Sistema PIAR • DUA
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleRegisterSubmit} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                        Nombres y Apellidos *
-                      </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      Correo Institucional *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="usuario@cem.edu.co"
+                      className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      Usuario (Username) y Clave *
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={regUsername}
+                        onChange={(e) => setRegUsername(e.target.value)}
+                        placeholder="usuario"
+                        className="w-1/2 px-2.5 py-2 rounded-lg border border-[#CBD5E1] text-xs font-mono-code"
+                      />
                       <input
                         type="text"
                         required
-                        value={regName}
-                        onChange={(e) => setRegName(e.target.value)}
-                        placeholder="Ej. Lic. Camilo Pardo"
-                        className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                        Perfil / Rol en el Sistema *
-                      </label>
-                      <select
-                        value={regRole}
-                        onChange={(e) => setRegRole(e.target.value as UserRole)}
-                        className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs bg-white font-semibold"
-                      >
-                        <option value="administrador">Administrador Institucional</option>
-                        <option value="psicologa">Profesional Psicóloga / Orientación</option>
-                        <option value="profesor">Profesor de Aula / Área</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                        Correo Institucional *
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="usuario@cem.edu.co"
-                        className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                        Usuario (Username) y Clave *
-                      </label>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          value={regUsername}
-                          onChange={(e) => setRegUsername(e.target.value)}
-                          placeholder="usuario"
-                          className="w-1/2 px-2.5 py-2 rounded-lg border border-[#CBD5E1] text-xs font-mono-code"
-                        />
-                        <input
-                          type="text"
-                          required
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="Clave*"
-                          className="w-1/2 px-2.5 py-2 rounded-lg border border-[#CBD5E1] text-xs font-mono-code"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                        Cargo / Área o Asignatura
-                      </label>
-                      <input
-                        type="text"
-                        value={regCargo}
-                        onChange={(e) => setRegCargo(e.target.value)}
-                        placeholder="Ej. Docente Matemáticas Secundaria"
-                        className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                        Tarjeta Profesional / Escalafón
-                      </label>
-                      <input
-                        type="text"
-                        value={regTarjeta}
-                        onChange={(e) => setRegTarjeta(e.target.value)}
-                        placeholder="Ej. T.P. 148920 / Escalafón 2A"
-                        className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        placeholder="Clave*"
+                        className="w-1/2 px-2.5 py-2 rounded-lg border border-[#CBD5E1] text-xs font-mono-code"
                       />
                     </div>
                   </div>
+                </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Guardar en Hoja Usuarios_Perfiles e Ingresar
-                  </button>
-                </form>
-              )}
-            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      Cargo / Área o Asignatura
+                    </label>
+                    <input
+                      type="text"
+                      value={regCargo}
+                      onChange={(e) => setRegCargo(e.target.value)}
+                      placeholder="Ej. Docente Matemáticas Secundaria"
+                      className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      Tarjeta Profesional / Escalafón
+                    </label>
+                    <input
+                      type="text"
+                      value={regTarjeta}
+                      onChange={(e) => setRegTarjeta(e.target.value)}
+                      placeholder="Ej. T.P. 148920 / Escalafón 2A"
+                      className="w-full px-3 py-2 rounded-lg border border-[#CBD5E1] text-xs"
+                    />
+                  </div>
+                </div>
 
-            <div className="pt-5 mt-5 border-t border-[#E2E8F0] flex items-center justify-between text-[11px] text-[#64748B]">
-              <span>Cifrado Clínico AES-256-GCM Activo</span>
-              <span>Sincronización Google Sheets (2.0s)</span>
-            </div>
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Guardar en Hoja Usuarios_Perfiles e Ingresar
+                </button>
+              </form>
+            )}
           </div>
 
-          {/* COLUMNA DERECHA: SELECTOR DE PERFILES DESDE LA HOJA USUARIOS_PERFILES */}
-          <div className="lg:col-span-6 p-6 sm:p-8 bg-[#F4F4F0] flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800">
-                    Hoja en Google Sheets: Usuarios_Perfiles
-                  </span>
-                  <h2 className="text-base sm:text-lg font-bold text-[#0F172A]">
-                    Perfiles Institucionales Configurados
-                  </h2>
-                </div>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-900 text-[11px] font-semibold">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                  Activos
-                </span>
-              </div>
-
-              <p className="text-xs text-[#475569]">
-                Haz clic en cualquier usuario registrado en la hoja{' '}
-                <code className="font-mono-code font-semibold text-[#0F172A]">Usuarios_Perfiles</code>{' '}
-                para autocompletar el formulario o ingresar directamente con sus permisos de rol:
-              </p>
-
-              <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
-                {usuariosCatalog
-                  .filter((u) => u.activo !== false)
-                  .map((usr) => {
-                    const isSelected =
-                      identifier.toLowerCase() === usr.correoInstitucional.toLowerCase() ||
-                      identifier.toLowerCase() === usr.username.toLowerCase();
-                    return (
-                      <div
-                        key={usr.id}
-                        onClick={() => handleQuickSelectUser(usr, false)}
-                        className={`p-3.5 rounded-xl border transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-white border-[#0F766E] ring-2 ring-teal-600/20 shadow-xs'
-                            : 'bg-white/90 border-[#CBD5E1] hover:bg-white hover:border-slate-400'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs sm:text-sm font-bold text-[#0F172A]">
-                                {usr.nombresApellidos}
-                              </span>
-                              {roleBadge(usr.rol)}
-                            </div>
-                            <p className="text-[11px] text-[#475569] mt-0.5">{usr.cargoArea}</p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickSelectUser(usr, true);
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-[#0F766E] hover:bg-[#115E59] text-white text-[11px] font-bold shrink-0 transition cursor-pointer"
-                          >
-                            Entrar →
-                          </button>
-                        </div>
-
-                        <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono-code text-[#64748B]">
-                          <span>
-                            Correo: <strong className="text-[#0F172A]">{usr.correoInstitucional}</strong>
-                          </span>
-                          <span>
-                            Clave: <strong className="text-teal-800">{usr.claveAcceso}</strong>
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white border border-[#CBD5E1] text-xs text-[#334155] space-y-1">
-              <div className="font-bold text-[#0F172A] flex items-center gap-1.5">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
-                Sincronización Bidireccional con Google Sheets
-              </div>
-              <p className="text-[11px] text-[#475569]">
-                Cualquier usuario o perfil que agregues desde la pestaña{' '}
-                <code className="font-mono-code">Usuarios_Perfiles</code> en tu archivo de Google
-                Sheets o desde el módulo de Tablas Maestras podrá iniciar sesión inmediatamente.
-              </p>
-            </div>
+          <div className="pt-5 mt-5 border-t border-[#E2E8F0] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#64748B]">
+            <span className="inline-flex items-center gap-1">
+              <Lock className="w-3 h-3 text-teal-700" />
+              Protección Ley 1581 • AES-256-GCM
+            </span>
+            <span>Sincronización Google Sheets (2.0s)</span>
           </div>
         </div>
       </div>
