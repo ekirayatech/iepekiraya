@@ -112,20 +112,32 @@ const DEFAULT_OAUTH_CLIENT_ID =
   '995821229747-42oilhngiqduavvq12rt7g8g6k1hujmu.apps.googleusercontent.com';
 
 export default function App() {
-  // Hoja Maestra Usuarios_Perfiles sincronizada con Google Sheets
-  const [usuariosCatalog, setUsuariosCatalog] = useState<UsuarioPerfilCatalogItem[]>([]);
+  // Hoja Maestra Usuarios_Perfiles sincronizada con Firestore y fallback inicial
+  const [usuariosCatalog, setUsuariosCatalog] = useState<UsuarioPerfilCatalogItem[]>(TABLA_USUARIOS_PERFILES_INICIAL);
 
   useEffect(() => {
     const fetchUsuarios = async () => {
-      const data = await getUsuarios();
-      if (data.length > 0) {
-        setUsuariosCatalog(data);
-      } else {
-        // Fallback to initial if empty
-        setUsuariosCatalog(TABLA_USUARIOS_PERFILES_INICIAL);
-        for (const user of TABLA_USUARIOS_PERFILES_INICIAL) {
-            await saveUsuario(user);
+      try {
+        const data = await getUsuarios();
+        if (data.length > 0) {
+          // Merge with initial to ensure default users are always present
+          const merged = [...TABLA_USUARIOS_PERFILES_INICIAL];
+          for (const u of data) {
+            const idx = merged.findIndex(m => m.id === u.id || m.correoInstitucional.toLowerCase() === u.correoInstitucional.toLowerCase());
+            if (idx >= 0) {
+              merged[idx] = u;
+            } else {
+              merged.push(u);
+            }
+          }
+          setUsuariosCatalog(merged);
+        } else {
+          for (const user of TABLA_USUARIOS_PERFILES_INICIAL) {
+            await saveUsuario(user).catch(() => {});
+          }
         }
+      } catch {
+        // keep TABLA_USUARIOS_PERFILES_INICIAL on error
       }
     };
     fetchUsuarios();

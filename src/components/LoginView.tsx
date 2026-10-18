@@ -23,6 +23,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { SyncStatus, UserRole, UsuarioPerfilCatalogItem } from '../types/piar';
+import { TABLA_USUARIOS_PERFILES_INICIAL } from '../data/colombianLegislationAndSeed';
 import { EKIRAYA_APPS_SCRIPT_CODE, isAppsScriptUrl } from '../services/googleSheetsService';
 import { resetUserPassword } from '../services/firebaseAuthService';
 import { saveUsuario } from '../services/firebaseDbService';
@@ -128,6 +129,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     try {
       const foundUser = usuariosCatalog.find(
         (u) => u.correoInstitucional.toLowerCase() === cleanEmail
+      ) || TABLA_USUARIOS_PERFILES_INICIAL.find(
+        (u) => u.correoInstitucional.toLowerCase() === cleanEmail
       );
 
       if (foundUser) {
@@ -136,7 +139,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           ...foundUser,
           claveAcceso: tempPass,
         };
-        await saveUsuario(updatedUser);
+        await saveUsuario(updatedUser).catch(() => {});
         setRecoverySuccess(
           `¡Contraseña restablecida con éxito para ${cleanEmail}! Tu nueva clave de acceso institucional es: "${tempPass}". Ya puedes regresar al ingreso y acceder al sistema.`
         );
@@ -172,7 +175,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
-    const matchedUser = usuariosCatalog.find(
+    const combinedCatalog = [...usuariosCatalog, ...TABLA_USUARIOS_PERFILES_INICIAL];
+    const matchedUser = combinedCatalog.find(
       (u) =>
         u.activo !== false &&
         (u.correoInstitucional.toLowerCase() === cleanId ||
