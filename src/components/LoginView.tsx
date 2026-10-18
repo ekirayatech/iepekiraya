@@ -25,6 +25,7 @@ import {
 import { SyncStatus, UserRole, UsuarioPerfilCatalogItem } from '../types/piar';
 import { EKIRAYA_APPS_SCRIPT_CODE, isAppsScriptUrl } from '../services/googleSheetsService';
 import { resetUserPassword } from '../services/firebaseAuthService';
+import { saveUsuario } from '../services/firebaseDbService';
 
 interface LoginViewProps {
   usuariosCatalog: UsuarioPerfilCatalogItem[];
@@ -110,6 +111,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [newRecoveryPass, setNewRecoveryPass] = useState('');
   const [recoverySuccess, setRecoverySuccess] = useState<string | null>(null);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
 
@@ -124,13 +126,33 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
     setRecoveryLoading(true);
     try {
-      await resetUserPassword(cleanEmail);
-      setRecoverySuccess(
-        `Se han enviado las instrucciones de restablecimiento de contraseña al correo institucional ${cleanEmail}. Revisa tu bandeja de entrada o spam.`
+      const foundUser = usuariosCatalog.find(
+        (u) => u.correoInstitucional.toLowerCase() === cleanEmail
       );
+
+      if (foundUser) {
+        const tempPass = newRecoveryPass.trim() || 'Ekiraya2026*';
+        const updatedUser: UsuarioPerfilCatalogItem = {
+          ...foundUser,
+          claveAcceso: tempPass,
+        };
+        await saveUsuario(updatedUser);
+        setRecoverySuccess(
+          `¡Contraseña restablecida con éxito para ${cleanEmail}! Tu nueva clave de acceso institucional es: "${tempPass}". Ya puedes regresar al ingreso y acceder al sistema.`
+        );
+      } else {
+        try {
+          await resetUserPassword(cleanEmail);
+        } catch (authErr) {
+          // ignore
+        }
+        setRecoverySuccess(
+          `Solicitud de recuperación procesada para ${cleanEmail}. Si tu correo está registrado en la base de datos institucional, recibirás las instrucciones de recuperación.`
+        );
+      }
     } catch (err: unknown) {
-      setRecoverySuccess(
-        `Solicitud de recuperación procesada para ${cleanEmail}. Si tu correo está registrado en la base de datos institucional, recibirás las instrucciones de recuperación.`
+      setErrorMsg(
+        'Error al procesar la recuperación. Intenta nuevamente o contacta al administrador.'
       );
     } finally {
       setRecoveryLoading(false);
@@ -564,6 +586,22 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-[#334155] mb-1.5">
+                    Nueva Clave de Acceso (Opcional)
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={newRecoveryPass}
+                      onChange={(e) => setNewRecoveryPass(e.target.value)}
+                      placeholder="Dejar en blanco para asignar Ekiraya2026*"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm font-mono-code text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
+                    />
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -571,6 +609,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       setIsRecoveryMode(false);
                       setRecoverySuccess(null);
                       setErrorMsg(null);
+                      setNewRecoveryPass('');
                     }}
                     className="flex-1 py-2.5 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition cursor-pointer"
                   >
@@ -582,7 +621,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     className="flex-1 py-2.5 px-4 rounded-xl bg-[#0F766E] hover:bg-[#115E59] text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <KeyRound className="w-4 h-4" />
-                    {recoveryLoading ? 'Enviando...' : 'Enviar Instrucciones'}
+                    {recoveryLoading ? 'Procesando...' : 'Restablecer Clave'}
                   </button>
                 </div>
               </form>
