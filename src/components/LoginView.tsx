@@ -8,23 +8,15 @@ import {
   KeyRound,
   Eye,
   EyeOff,
-  FileSpreadsheet,
-  RefreshCw,
   CheckCircle2,
   AlertCircle,
   UserPlus,
   LogIn,
   LogOut,
   X,
-  Code2,
-  Copy,
-  Check,
-  Link2,
-  ExternalLink,
 } from 'lucide-react';
 import { SyncStatus, UserRole, UsuarioPerfilCatalogItem } from '../types/piar';
 import { TABLA_USUARIOS_PERFILES_INICIAL } from '../data/colombianLegislationAndSeed';
-import { EKIRAYA_APPS_SCRIPT_CODE, isAppsScriptUrl } from '../services/googleSheetsService';
 import { resetUserPassword } from '../services/firebaseAuthService';
 import { saveUsuario } from '../services/firebaseDbService';
 
@@ -35,10 +27,6 @@ interface LoginViewProps {
   onLoginSuccess: (user: UsuarioPerfilCatalogItem) => void;
   onAddUserAndLogin: (newUser: UsuarioPerfilCatalogItem) => void;
   onLogout?: () => void;
-  onConnectGoogleOAuth: () => void;
-  onForceSyncSheets: () => Promise<void>;
-  onConnectAppsScriptUrl?: (scriptUrl: string) => Promise<void>;
-  onOpenSheetsModal?: () => void;
   onCancel?: () => void;
 }
 
@@ -49,9 +37,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
   onAddUserAndLogin,
   onLogout,
-  onForceSyncSheets,
-  onConnectAppsScriptUrl,
-  onOpenSheetsModal,
   onCancel,
 }) => {
   const [identifier, setIdentifier] = useState('');
@@ -60,36 +45,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [logoutToast, setLogoutToast] = useState<string | null>(null);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [showSolutionBPanel, setShowSolutionBPanel] = useState(false);
-  const [scriptUrlInput, setScriptUrlInput] = useState(
-    isAppsScriptUrl(syncStatus.spreadsheetId) ? syncStatus.spreadsheetId : ''
-  );
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [showCodePreview, setShowCodePreview] = useState(false);
-  const [linkingBridge, setLinkingBridge] = useState(false);
-  const [bridgeSuccess, setBridgeSuccess] = useState<string | null>(null);
-
-  const handleCopyScriptCode = () => {
-    navigator.clipboard?.writeText(EKIRAYA_APPS_SCRIPT_CODE);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2500);
-  };
-
-  const handleConnectBridgeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!scriptUrlInput.trim() || !onConnectAppsScriptUrl) return;
-    setLinkingBridge(true);
-    setBridgeSuccess(null);
-    try {
-      await onConnectAppsScriptUrl(scriptUrlInput.trim());
-      setBridgeSuccess(
-        '¡Puente Google Apps Script vinculado! Las 8 pestañas (incluida Usuarios_Perfiles) ya están sincronizadas sin OAuth.'
-      );
-    } finally {
-      setLinkingBridge(false);
-    }
-  };
 
   const handleLogoutClick = () => {
     if (onLogout) {
@@ -238,14 +193,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     onAddUserAndLogin(newUser);
   };
 
-  const handleSyncClick = async () => {
-    setIsSyncing(true);
-    try {
-      await onForceSyncSheets();
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+
 
   const roleBadge = (rol: UserRole) => {
     if (rol === 'administrador') {
@@ -294,40 +242,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && syncStatus.isConnectedToGoogle && (
-              <button
-                type="button"
-                onClick={handleSyncClick}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-800 hover:bg-teal-700 text-white text-xs font-semibold transition cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                Sync (2s)
-              </button>
-            )}
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowSolutionBPanel(!showSolutionBPanel)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white text-xs font-bold transition cursor-pointer"
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                {showSolutionBPanel ? 'Ocultar Apps Script ▲' : 'Conectar Sheets (Sin OAuth) ▼'}
-              </button>
-            )}
-
-            {isAdmin && onOpenSheetsModal && (
-              <button
-                type="button"
-                onClick={onOpenSheetsModal}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition cursor-pointer"
-                title="Abrir configuración completa de Google Sheets"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                Sheets
-              </button>
-            )}
-
             {currentUser && onLogout && (
               <button
                 type="button"
@@ -352,108 +266,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
             )}
           </div>
         </div>
-
-        {/* Barra Interactiva Solución B: Solo visible para el Administrador */}
-        {isAdmin && showSolutionBPanel && (
-          <div className="bg-indigo-50/90 border-b border-indigo-200 px-5 py-3.5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="px-2 py-0.5 rounded bg-indigo-700 text-white font-bold text-[11px]">
-                  SOLUCIÓN B (SIN OAUTH)
-                </span>
-                <span className="font-bold text-indigo-950">
-                  Conecta tu Google Sheet sin error OAuth 2.0:
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5">
-                <a
-                  href="https://sheets.new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3 h-3" />
-                  1. Abrir Sheet
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                <button
-                  type="button"
-                  onClick={handleCopyScriptCode}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-bold cursor-pointer"
-                >
-                  {copiedCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  {copiedCode ? '¡Código Copiado!' : '2. Copiar Apps Script'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCodePreview(!showCodePreview)}
-                  className="px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-900 text-[11px] font-semibold hover:bg-indigo-100 cursor-pointer"
-                >
-                  {showCodePreview ? 'Ocultar ▲' : 'Ver Código ▼'}
-                </button>
-              </div>
-            </div>
-
-            {showCodePreview && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] text-slate-700">
-                  En tu Google Sheet ve a <strong>Extensiones → Apps Script</strong>, pega este código, pulsa <strong>Implementar → Nueva implementación → Aplicación web</strong> (Ejecutar como: <em>"Yo"</em>, Acceso: <em>"Cualquier persona"</em>) y copia la URL terminada en <code className="font-mono-code font-bold">/exec</code>:
-                </p>
-                <pre className="p-3 rounded-xl bg-slate-900 text-emerald-300 font-mono-code text-[11px] overflow-x-auto max-h-44 border border-slate-700">
-                  {EKIRAYA_APPS_SCRIPT_CODE}
-                </pre>
-              </div>
-            )}
-
-            {onConnectAppsScriptUrl && (
-              <form onSubmit={handleConnectBridgeSubmit} className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={scriptUrlInput}
-                  onChange={(e) => setScriptUrlInput(e.target.value)}
-                  placeholder="3. Pega aquí la URL (https://script.google.com/macros/s/.../exec)"
-                  className="flex-1 px-3 py-1.5 rounded-lg border border-indigo-300 bg-white text-xs font-mono-code text-slate-900 focus:outline-none focus:border-indigo-700"
-                />
-                <button
-                  type="submit"
-                  disabled={linkingBridge || !scriptUrlInput.trim()}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition cursor-pointer disabled:opacity-50 shrink-0"
-                >
-                  <Link2 className="w-3.5 h-3.5" />
-                  {linkingBridge ? 'Sincronizando...' : 'Vincular 8 Hojas'}
-                </button>
-              </form>
-            )}
-
-            {bridgeSuccess && (
-              <div className="p-2 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                <span>{bridgeSuccess}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {isAdmin && syncStatus.lastError && (
-          <div className="bg-amber-50 border-b border-amber-300 px-5 py-2.5 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>
-                <strong>Aviso Google Sheets:</strong> {syncStatus.lastError}
-              </span>
-            </div>
-            {onOpenSheetsModal && (
-              <button
-                type="button"
-                onClick={onOpenSheetsModal}
-                className="px-2.5 py-1 rounded-md bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold shrink-0 cursor-pointer"
-              >
-                Configurar Puente →
-              </button>
-            )}
-          </div>
-        )}
 
         {/* FORMULARIO DE LOGIN / REGISTRO Y CONTROL DE SESIÓN */}
         <div className="p-6 sm:p-8 bg-white flex flex-col justify-between">
@@ -813,9 +625,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               Protección Ley 1581 • AES-256-GCM
             </span>
             <span>
-              {isAdmin
-                ? 'Sincronización Google Sheets (2.0s)'
-                : 'Decreto 1421 de 2017 • MEN Colombia'}
+              Decreto 1421 de 2017 • MEN Colombia
             </span>
           </div>
         </div>

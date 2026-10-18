@@ -56,14 +56,8 @@ import {
   deleteEstudiante,
   saveAjuste,
   deleteAjuste,
+  saveUsuario,
 } from './services/firebaseDbService';
-import {
-  createEkirayaSpreadsheet,
-  extractSpreadsheetId,
-  isAppsScriptUrl,
-  pullDataFromSpreadsheet,
-  pushAllDataToSpreadsheet,
-} from './services/googleSheetsService';
 import {
   getAccessToken,
   googleSignIn,
@@ -74,6 +68,7 @@ import {
   EKIRAYA_LOGO_URL,
   exportDetailedExcelWorkbook,
   exportOfficialPiarPdf,
+  exportBatchPiarPdf,
   exportSubjectAdaptationsCsv,
   getPreloadedSignature,
   processUploadedSignatureFileToPng,
@@ -84,7 +79,6 @@ import { RoleDashboard } from './components/RoleDashboard';
 import { PiarEditorModal } from './components/PiarEditorModal';
 import { AuditPdfModal } from './components/AuditPdfModal';
 import { AdjustmentBankView } from './components/AdjustmentBankView';
-import { SheetsSyncModal } from './components/SheetsSyncModal';
 import { LegislationGuideView } from './components/LegislationGuideView';
 import { CatalogTablesView } from './components/CatalogTablesView';
 import { LoginView } from './components/LoginView';
@@ -269,46 +263,30 @@ export default function App() {
     'EKIRAYA-IEP-MEN-1421-COLOMBIA-2026-KEY'
   );
 
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => {
-    let savedSheet = { id: '', url: '', title: '' };
-    try {
-      const raw = localStorage.getItem(STORAGE_SHEET_META_KEY);
-      if (raw) savedSheet = JSON.parse(raw);
-    } catch {
-      // ignore
-    }
-    const connectedViaBridge = isAppsScriptUrl(savedSheet.id || '');
-    return {
-      isConnectedToGoogle: connectedViaBridge,
-      spreadsheetId: savedSheet.id || '',
-      spreadsheetUrl: savedSheet.url || '',
-      spreadsheetTitle:
-        savedSheet.title || 'Ekirayá IEP — Base de Datos PIAR & DUA (2026)',
-      lastSyncTimestamp: new Date().toLocaleTimeString('es-CO'),
-      syncIntervalMs: 2000,
-      syncCycleCount: 1,
-      isSyncingNow: false,
-      activeCollaborators: [
-        {
-          name: 'Dra. Valentina Morales Pineda',
-          role: 'Psicóloga Orientadora',
-          status: 'En línea (Sync 2s)',
-        },
-        {
-          name: 'Mg. Esteban Bolaños Rodríguez',
-          role: 'Administrador',
-          status: 'En línea (Sync 2s)',
-        },
-        {
-          name: 'Lic. Carlos Andrés Restrepo',
-          role: 'Profesor Matemáticas',
-          status: 'Editando Anexo 2',
-        },
-      ],
-      encryptionActive: true,
-      encryptionAlgorithm: 'AES-256-GCM + SHA-256',
-      lastError: null,
-    };
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    isConnectedToGoogle: false,
+    spreadsheetId: '',
+    spreadsheetUrl: '',
+    spreadsheetTitle: 'Ekirayá IEP — Base de Datos Firestore (2026)',
+    lastSyncTimestamp: new Date().toLocaleTimeString('es-CO'),
+    syncIntervalMs: 0,
+    syncCycleCount: 1,
+    isSyncingNow: false,
+    activeCollaborators: [
+      {
+        name: 'Dra. Valentina Morales Pineda',
+        role: 'Psicóloga Orientadora',
+        status: 'En línea (Firestore)',
+      },
+      {
+        name: 'Mg. Esteban Bolaños Rodríguez',
+        role: 'Administrador',
+        status: 'En línea (Firestore)',
+      },
+    ],
+    encryptionActive: true,
+    encryptionAlgorithm: 'AES-256-GCM + SHA-256',
+    lastError: null,
   });
 
   // Inicializar listener de Firebase Auth con caché en memoria
@@ -440,7 +418,6 @@ export default function App() {
       } catch {
         // ignore quota errors
       }
-      isDirtyForSheetsRef.current = true;
       broadcastChannelRef.current?.postMessage({
         type: 'SYNC_STATE_UPDATE',
         students: nextStudents,
@@ -449,115 +426,6 @@ export default function App() {
     },
     []
   );
-
-  // MOTOR DE SINCRONIZACIÓN EN TIEMPO REAL CADA 2 SEGUNDOS (2000ms)
-  useEffect(() => {
-    const intervalId = setInterval(async () => {
-      setSyncStatus((prev) => ({
-        ...prev,
-        isSyncingNow: true,
-        syncCycleCount: prev.syncCycleCount + 1,
-        lastSyncTimestamp: new Date().toLocaleTimeString('es-CO'),
-      }));
-
-      // 1. Verificar si otra pestaña/usuario actualizó el almacenamiento compartido
-      try {
-        const externalStudentsRaw = localStorage.getItem(STORAGE_STUDENTS_KEY);
-        if (externalStudentsRaw && !editorModalState.isOpen) {
-          const parsedExt = JSON.parse(externalStudentsRaw) as StudentPIAR[];
-          if (JSON.stringify(parsedExt) !== JSON.stringify(studentsRef.current)) {
-            setStudents(parsedExt);
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      // 2. Si hay conexión activa con Google Sheets (OAuth o Puente Apps Script) y un Spreadsheet vinculado, sincronizar cada 2s
-      const canSyncNow =
-        Boolean(syncStatus.spreadsheetId) &&
-        (Boolean(accessToken) || isAppsScriptUrl(syncStatus.spreadsheetId));
-      if (canSyncNow) {
-        try {
-          const activeToken = (await getAccessToken()) || accessToken || '';
-          if (isDirtyForSheetsRef.current) {
-            isDirtyForSheetsRef.current = false;
-            await pushAllDataToSpreadsheet(
-              activeToken,
-              syncStatus.spreadsheetId,
-              studentsRef.current,
-              bankRef.current,
-              encryptionKey,
-              cursosRef.current,
-              categoriasRef.current,
-              usuariosRef.current
-            );
-          } else if (!editorModalState.isOpen) {
-            const remote = await pullDataFromSpreadsheet(
-              activeToken,
-              syncStatus.spreadsheetId,
-              encryptionKey
-            );
-            if (remote.cursosCatalog && remote.cursosCatalog.length > 0) {
-              setCursosCatalog(remote.cursosCatalog);
-              localStorage.setItem(STORAGE_CURSOS_KEY, JSON.stringify(remote.cursosCatalog));
-            }
-            if (remote.categoriasCatalog && remote.categoriasCatalog.length > 0) {
-              setCategoriasCatalog(remote.categoriasCatalog);
-              localStorage.setItem(
-                STORAGE_CATEGORIAS_KEY,
-                JSON.stringify(remote.categoriasCatalog)
-              );
-            }
-            if (remote.usuariosCatalog && remote.usuariosCatalog.length > 0) {
-              setUsuariosCatalog(remote.usuariosCatalog);
-              localStorage.setItem(
-                STORAGE_USUARIOS_KEY,
-                JSON.stringify(remote.usuariosCatalog)
-              );
-            }
-            if (remote.students && remote.students.length > 0) {
-              // Merge inteligente por updatedAt para trabajo simultáneo de múltiples usuarios
-              const mergedMap = new Map<string, StudentPIAR>();
-              for (const localSt of studentsRef.current) {
-                mergedMap.set(localSt.id, localSt);
-              }
-              let changedFromRemote = false;
-              for (const remSt of remote.students) {
-                const existing = mergedMap.get(remSt.id);
-                if (
-                  !existing ||
-                  new Date(remSt.updatedAt).getTime() >
-                    new Date(existing.updatedAt).getTime()
-                ) {
-                  mergedMap.set(remSt.id, remSt);
-                  changedFromRemote = true;
-                }
-              }
-              if (changedFromRemote) {
-                const mergedList = Array.from(mergedMap.values());
-                setStudents(mergedList);
-                localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(mergedList));
-              }
-            }
-          }
-          setSyncStatus((prev) => ({ ...prev, isSyncingNow: false, lastError: null }));
-        } catch (err) {
-          setSyncStatus((prev) => ({
-            ...prev,
-            isSyncingNow: false,
-            lastError: err instanceof Error ? err.message : 'Error de red en Google Sheets',
-          }));
-        }
-      } else {
-        setTimeout(() => {
-          setSyncStatus((prev) => ({ ...prev, isSyncingNow: false }));
-        }, 350);
-      }
-    }, 2000);
-
-    return () => clearInterval(intervalId);
-  }, [accessToken, syncStatus.spreadsheetId, encryptionKey, editorModalState.isOpen]);
 
   const handleSaveCustomClientId = (newClientId: string) => {
     setCustomClientId(newClientId);
@@ -570,266 +438,6 @@ export default function App() {
     } catch {
       // ignore
     }
-  };
-
-  // Autenticación OAuth 2.0 con Firebase Auth (GoogleAuthProvider) o Client ID personalizado
-  const handleConnectGoogleOAuth = async (
-    autoCreateOrCustomClientId?: boolean | string
-  ) => {
-    const autoCreateSheetAfterAuth =
-      typeof autoCreateOrCustomClientId === 'boolean'
-        ? autoCreateOrCustomClientId
-        : true;
-    const overrideClientId =
-      typeof autoCreateOrCustomClientId === 'string'
-        ? autoCreateOrCustomClientId
-        : customClientId || DEFAULT_OAUTH_CLIENT_ID;
-
-    try {
-      const result = await googleSignIn(
-        overrideClientId !== firebaseAppletConfig.oAuthClientId
-          ? overrideClientId
-          : undefined
-      );
-      if (result?.accessToken) {
-        const token = result.accessToken;
-        setAccessToken(token);
-        setSyncStatus((prev) => ({
-          ...prev,
-          isConnectedToGoogle: true,
-          lastError: null,
-        }));
-        appendAuditLog('Conexión OAuth 2.0 establecida con Google Sheets API');
-
-        if (autoCreateSheetAfterAuth && !syncStatus.spreadsheetId) {
-          try {
-            const created = await createEkirayaSpreadsheet(
-              token,
-              studentsRef.current,
-              bankRef.current,
-              encryptionKey,
-              cursosRef.current,
-              categoriasRef.current,
-              usuariosRef.current
-            );
-            localStorage.setItem(
-              STORAGE_SHEET_META_KEY,
-              JSON.stringify({
-                id: created.spreadsheetId,
-                url: created.spreadsheetUrl,
-                title: created.title,
-              })
-            );
-            setSyncStatus((prev) => ({
-              ...prev,
-              isConnectedToGoogle: true,
-              spreadsheetId: created.spreadsheetId,
-              spreadsheetUrl: created.spreadsheetUrl,
-              spreadsheetTitle: created.title,
-              lastError: null,
-            }));
-            appendAuditLog(
-              `Hoja de cálculo creada en Google Drive (${created.spreadsheetId})`
-            );
-          } catch (err) {
-            setSyncStatus((prev) => ({
-              ...prev,
-              lastError:
-                err instanceof Error
-                  ? err.message
-                  : 'Autenticado, pero ocurrió un error al crear la hoja automáticamente.',
-            }));
-          }
-        }
-      }
-    } catch (err) {
-      setSyncStatus((prev) => ({
-        ...prev,
-        lastError:
-          err instanceof Error
-            ? err.message
-            : 'No fue posible completar la autenticación con Google OAuth 2.0.',
-      }));
-    }
-  };
-
-  // Crear nueva Hoja de Cálculo Google Sheets con las 8 pestañas de Ekirayá IEP
-  const handleCreateNewGoogleSheet = async () => {
-    const activeToken = (await getAccessToken()) || accessToken;
-    if (!activeToken) {
-      await handleConnectGoogleOAuth(true);
-      return;
-    }
-    try {
-      const created = await createEkirayaSpreadsheet(
-        activeToken,
-        students,
-        adjustmentBank,
-        encryptionKey,
-        cursosCatalog,
-        categoriasCatalog,
-        usuariosCatalog
-      );
-      localStorage.setItem(
-        STORAGE_SHEET_META_KEY,
-        JSON.stringify({
-          id: created.spreadsheetId,
-          url: created.spreadsheetUrl,
-          title: created.title,
-        })
-      );
-      setSyncStatus((prev) => ({
-        ...prev,
-        spreadsheetId: created.spreadsheetId,
-        spreadsheetUrl: created.spreadsheetUrl,
-        spreadsheetTitle: created.title,
-        lastError: null,
-      }));
-      appendAuditLog(
-        `Creada nueva base de datos Google Sheets (${created.spreadsheetId})`
-      );
-    } catch (err) {
-      setSyncStatus((prev) => ({
-        ...prev,
-        lastError:
-          err instanceof Error ? err.message : 'No fue posible crear el Google Sheet.',
-      }));
-    }
-  };
-
-  // Vincular un Google Sheet existente o una URL de Puente Google Apps Script (/exec)
-  const handleConnectExistingSheet = async (sheetIdOrUrl: string) => {
-    const extractedId = extractSpreadsheetId(sheetIdOrUrl);
-    const usingBridge = isAppsScriptUrl(extractedId);
-    const url = usingBridge
-      ? extractedId
-      : `https://docs.google.com/spreadsheets/d/${extractedId}/edit`;
-    const titleLabel = usingBridge
-      ? 'Google Sheet Conectado vía Puente Apps Script (Sin OAuth)'
-      : `Google Sheet Institucional (${extractedId.slice(0, 8)}...)`;
-
-    localStorage.setItem(
-      STORAGE_SHEET_META_KEY,
-      JSON.stringify({
-        id: extractedId,
-        url,
-        title: titleLabel,
-      })
-    );
-    setSyncStatus((prev) => ({
-      ...prev,
-      isConnectedToGoogle: usingBridge ? true : prev.isConnectedToGoogle,
-      spreadsheetId: extractedId,
-      spreadsheetUrl: url,
-      spreadsheetTitle: titleLabel,
-      lastError: null,
-    }));
-
-    const activeToken = (await getAccessToken()) || accessToken || '';
-    if (activeToken || usingBridge) {
-      try {
-        const remote = await pullDataFromSpreadsheet(
-          activeToken,
-          extractedId,
-          encryptionKey
-        );
-        if (remote.spreadsheetUrl || remote.spreadsheetTitle) {
-          const resolvedUrl = remote.spreadsheetUrl || url;
-          const resolvedTitle = remote.spreadsheetTitle || titleLabel;
-          localStorage.setItem(
-            STORAGE_SHEET_META_KEY,
-            JSON.stringify({
-              id: extractedId,
-              url: resolvedUrl,
-              title: resolvedTitle,
-            })
-          );
-          setSyncStatus((prev) => ({
-            ...prev,
-            spreadsheetUrl: resolvedUrl,
-            spreadsheetTitle: resolvedTitle,
-          }));
-        }
-        if (remote.usuariosCatalog && remote.usuariosCatalog.length > 0) {
-          setUsuariosCatalog(remote.usuariosCatalog);
-          localStorage.setItem(STORAGE_USUARIOS_KEY, JSON.stringify(remote.usuariosCatalog));
-        }
-        if (remote.students && remote.students.length > 0) {
-          setStudents(remote.students);
-          localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(remote.students));
-        }
-        if (
-          !remote.students ||
-          remote.students.length === 0 ||
-          !remote.usuariosCatalog ||
-          remote.usuariosCatalog.length === 0
-        ) {
-          await pushAllDataToSpreadsheet(
-            activeToken,
-            extractedId,
-            remote.students && remote.students.length > 0 ? remote.students : students,
-            remote.adjustmentBank && remote.adjustmentBank.length > 0
-              ? remote.adjustmentBank
-              : adjustmentBank,
-            encryptionKey,
-            remote.cursosCatalog && remote.cursosCatalog.length > 0
-              ? remote.cursosCatalog
-              : cursosCatalog,
-            remote.categoriasCatalog && remote.categoriasCatalog.length > 0
-              ? remote.categoriasCatalog
-              : categoriasCatalog,
-            remote.usuariosCatalog && remote.usuariosCatalog.length > 0
-              ? remote.usuariosCatalog
-              : usuariosCatalog
-          );
-        }
-        appendAuditLog(
-          usingBridge
-            ? 'Vinculado y sincronizado Google Sheet mediante Puente Apps Script (Sin OAuth)'
-            : `Vinculado y sincronizado Google Sheet ID: ${extractedId}`
-        );
-      } catch (err) {
-        setSyncStatus((prev) => ({
-          ...prev,
-          lastError:
-            err instanceof Error
-              ? err.message
-              : 'Verifica que el Sheet o Puente Apps Script tenga permisos de edición.',
-        }));
-      }
-    }
-  };
-
-  const handleForceManualSync = async () => {
-    isDirtyForSheetsRef.current = true;
-    setSyncStatus((prev) => ({
-      ...prev,
-      isSyncingNow: true,
-      lastSyncTimestamp: new Date().toLocaleTimeString('es-CO'),
-    }));
-    const activeToken = (await getAccessToken()) || accessToken || '';
-    const canSync =
-      Boolean(syncStatus.spreadsheetId) &&
-      (Boolean(activeToken) || isAppsScriptUrl(syncStatus.spreadsheetId));
-    if (canSync) {
-      try {
-        await pushAllDataToSpreadsheet(
-          activeToken,
-          syncStatus.spreadsheetId,
-          students,
-          adjustmentBank,
-          encryptionKey,
-          cursosCatalog,
-          categoriasCatalog,
-          usuariosCatalog
-        );
-      } catch {
-        // handled in status
-      }
-    }
-    setTimeout(() => {
-      setSyncStatus((prev) => ({ ...prev, isSyncingNow: false }));
-    }, 400);
   };
 
   // Guardar o Crear Estudiante PIAR
@@ -1942,7 +1550,7 @@ export default function App() {
             />
           )}
 
-          {/* VISTA 3.5: TABLAS MAESTRAS EN GOOGLE SHEETS (EXCLUSIVO ADMINISTRADOR) */}
+          {/* VISTA 3.5: TABLAS MAESTRAS EN FIRESTORE (EXCLUSIVO ADMINISTRADOR) */}
           {activeView === 'catalogos' && isAdmin && (
             <CatalogTablesView
               cursosCatalog={cursosCatalog}
@@ -1955,15 +1563,6 @@ export default function App() {
               onAddUsuario={handleAddUsuarioCatalog}
               onDeleteUsuario={handleDeleteUsuarioCatalog}
               onSwitchActiveUser={handleLoginSuccess}
-              onForceSyncSheets={() => {
-                if (!accessToken || !syncStatus.spreadsheetId) {
-                  handleCreateNewGoogleSheet();
-                } else {
-                  handleForceManualSync();
-                }
-              }}
-              spreadsheetId={syncStatus.spreadsheetId}
-              isConnected={Boolean(accessToken && syncStatus.spreadsheetId)}
             />
           )}
 
@@ -2108,36 +1707,7 @@ export default function App() {
         />
       )}
 
-      {/* MODAL DE CONFIGURACIÓN GOOGLE SHEETS (SYNC 2S) — EXCLUSIVO ADMINISTRADOR */}
-      {isSheetsModalOpen && isAdmin && (
-        <SheetsSyncModal
-          syncStatus={syncStatus}
-          students={students}
-          encryptionKey={encryptionKey}
-          auditLogs={auditLogs}
-          customClientId={customClientId}
-          onSaveCustomClientId={handleSaveCustomClientId}
-          onClose={() => setIsSheetsModalOpen(false)}
-          onConnectGoogleOAuth={(overrideId) => handleConnectGoogleOAuth(overrideId || true)}
-          onCreateNewGoogleSheet={handleCreateNewGoogleSheet}
-          onConnectExistingSheet={handleConnectExistingSheet}
-          onForceManualSync={handleForceManualSync}
-          onUpdateEncryptionKey={(newKey) => setEncryptionKey(newKey)}
-          onExportExcelWorkbook={() =>
-            exportDetailedExcelWorkbook(
-              students,
-              adjustmentBank,
-              roleProfile.canEditClinicalDiagnosis,
-              cursosCatalog,
-              categoriasCatalog,
-              usuariosCatalog
-            )
-          }
-          onExportCsvMatrix={() => exportSubjectAdaptationsCsv(students)}
-        />
-      )}
-
-      {/* FORMULARIO DE INICIO DE SESIÓN (LOGIN) CONECTADO A LA HOJA USUARIOS_PERFILES */}
+      {/* FORMULARIO DE INICIO DE SESIÓN (LOGIN) */}
       {isLoginModalOpen && (
         <LoginView
           usuariosCatalog={usuariosCatalog}
@@ -2146,10 +1716,6 @@ export default function App() {
           onLoginSuccess={handleLoginSuccess}
           onAddUserAndLogin={handleAddUserAndLogin}
           onLogout={handleLogout}
-          onConnectGoogleOAuth={() => handleConnectGoogleOAuth(true)}
-          onForceSyncSheets={handleForceManualSync}
-          onConnectAppsScriptUrl={handleConnectExistingSheet}
-          onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
           onCancel={currentUser ? () => setIsLoginModalOpen(false) : undefined}
         />
       )}

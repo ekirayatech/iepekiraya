@@ -31,7 +31,6 @@ interface RoleDashboardProps {
   onOpenNewPiar: (presetSuperior?: boolean) => void;
   onEditStudent: (student: StudentPIAR, defaultTab?: 'general' | 'asignaturas' | 'seguimiento' | 'historial') => void;
   onOpenAuditPdf: (student: StudentPIAR) => void;
-  onOpenSheetsModal: () => void;
   onExportExcel: () => void;
   onNavigateView: (view: 'estudiantes' | 'banco' | 'normativa') => void;
 }
@@ -45,7 +44,6 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
   onOpenNewPiar,
   onEditStudent,
   onOpenAuditPdf,
-  onOpenSheetsModal,
   onExportExcel,
   onNavigateView,
 }) => {
@@ -220,16 +218,9 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
                   Estado de Auditoría Institucional por Estudiante (SIMAT 2026)
                 </h3>
                 <p className="text-xs text-[#64748B]">
-                  Verificación de Anexos 1, 2 y 3 (Decreto 1421), firma profesional y cifrado en Google Sheets
+                  Verificación de Anexos 1, 2 y 3 (Decreto 1421), firma profesional y persistencia segura en Firestore
                 </p>
               </div>
-              <button
-                onClick={onOpenSheetsModal}
-                className="text-xs font-semibold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 cursor-pointer"
-              >
-                Configurar Base Google Sheets
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             <div className="overflow-x-auto">
@@ -353,10 +344,10 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
             </div>
 
             <button
-              onClick={onOpenSheetsModal}
-              className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer"
+              onClick={onExportExcel}
+              className="w-full py-2.5 px-4 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
             >
-              Gestionar Conexión Google Sheets y Encriptación
+              📊 Exportar Matriz Completa a Excel
             </button>
           </div>
         </div>

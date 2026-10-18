@@ -41,9 +41,6 @@ interface CatalogTablesViewProps {
   onAddUsuario: (usr: UsuarioPerfilCatalogItem) => void;
   onDeleteUsuario: (id: string) => void;
   onSwitchActiveUser?: (usr: UsuarioPerfilCatalogItem) => void;
-  onForceSyncSheets: () => void;
-  spreadsheetId: string;
-  isConnected: boolean;
   initialSubTab?: 'usuarios' | 'cursos' | 'simat';
 }
 
@@ -58,9 +55,6 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
   onAddUsuario,
   onDeleteUsuario,
   onSwitchActiveUser,
-  onForceSyncSheets,
-  spreadsheetId,
-  isConnected,
   initialSubTab = 'usuarios',
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'cursos' | 'simat'>(
@@ -274,53 +268,25 @@ export const CatalogTablesView: React.FC<CatalogTablesViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Cabecera de sincronización con Google Sheets */}
+      {/* Cabecera de Tablas Maestras en Firestore */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              Pestañas en Google Sheets: Usuarios_Perfiles, Tabla_Cursos_Anios & Tabla_Categorias_SIMAT
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Base de Datos Institucional: Firestore
             </span>
             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Sincronización en Tiempo Real (2s)
+              Sincronizada con Exportación Excel
             </span>
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            Tablas Maestras en Google Sheets: Usuarios y Perfiles, Cursos (2026-2027) y Categorías SIMAT
+            Tablas Maestras: Usuarios y Perfiles, Cursos (2026-2027) y Categorías SIMAT
           </h2>
           <p className="text-xs text-slate-600 max-w-3xl">
-            Estas tres tablas alimentan el formulario de Inicio de Sesión (Login) y los selectores PIAR, y se crean automáticamente como pestañas oficiales{' '}
-            <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono">Usuarios_Perfiles</code>,{' '}
-            <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono">Tabla_Cursos_Anios</code> y{' '}
-            <code className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono">Tabla_Categorias_SIMAT</code>{' '}
-            en tu archivo de Google Sheets.
+            Estas tablas alimentan el formulario de Inicio de Sesión (Login) y los selectores PIAR de la institución educativa.
           </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <button
-            onClick={onForceSyncSheets}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-teal-700 text-white hover:bg-teal-800 transition shadow-xs cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            {isConnected
-              ? 'Sincronizar 8 Pestañas con Google Sheets Ahora'
-              : 'Conectar y Crear Pestañas en Google Sheets'}
-          </button>
-
-          {spreadsheetId && (
-            <a
-              href={`https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition"
-            >
-              <span>Ver Pestañas en Google Sheets</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          )}
         </div>
       </div>
 
