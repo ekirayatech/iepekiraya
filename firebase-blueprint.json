@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "Usuario": {
+      "title": "Usuario",
+      "description": "Usuario del sistema escolar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "correoInstitucional": { "type": "string", "format": "email" },
+        "nombresApellidos": { "type": "string" },
+        "rol": { "type": "string", "enum": ["administrador", "psicologa", "profesor"] },
+        "activo": { "type": "boolean" }
+      },
+      "required": ["id", "correoInstitucional", "nombresApellidos", "rol"]
+    },
+    "Estudiante": {
+      "title": "Estudiante",
+      "description": "Expediente PIAR del estudiante",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nombresApellidos": { "type": "string" },
+        "curso": { "type": "string" },
+        "estadoPiar": { "type": "string" }
+      },
+      "required": ["id", "nombresApellidos", "curso"]
+    },
+    "AjusteRazonable": {
+      "title": "AjusteRazonable",
+      "description": "Estrategia de ajuste razonable en el banco",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "titulo": { "type": "string" }
+      },
+      "required": ["id", "titulo"]
+    }
+  },
+  "firestore": {
+    "/usuarios/{usuarioId}": {
+      "schema": "Usuario",
+      "description": "Catálogo de usuarios del sistema"
+    },
+    "/estudiantes/{estudianteId}": {
+      "schema": "Estudiante",
+      "description": "Expedientes de estudiantes PIAR"
+    },
+    "/bancoAjustes/{ajusteId}": {
+      "schema": "AjusteRazonable",
+      "description": "Banco de estrategias DUA"
+    }
+  }
+}

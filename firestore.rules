@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isSignedIn() { return request.auth != null; }
+    
+    function getUserData() {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) ?
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data :
+             {'rol': 'invitado'};
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getUserData().rol == 'administrador';
+    }
+
+    function isPsicologa() {
+      return isSignedIn() && getUserData().rol == 'psicologa';
+    }
+
+    function isProfesor() {
+      return isSignedIn() && getUserData().rol == 'profesor';
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Usuarios: Anyone logged in can read profile data, only admin can manage users
+    match /usuarios/{usuarioId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Estudiantes: Admin & Psicologa can read/write, Profesor can read/write
+    match /estudiantes/{estudianteId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isPsicologa() || isProfesor();
+    }
+
+    // Banco de Ajustes: Admin & Psicologa can read/write, Profesor can read
+    match /bancoAjustes/{ajusteId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isPsicologa();
+    }
+  }
+}

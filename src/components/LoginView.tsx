@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { SyncStatus, UserRole, UsuarioPerfilCatalogItem } from '../types/piar';
 import { EKIRAYA_APPS_SCRIPT_CODE, isAppsScriptUrl } from '../services/googleSheetsService';
+import { resetUserPassword } from '../services/firebaseAuthService';
 
 interface LoginViewProps {
   usuariosCatalog: UsuarioPerfilCatalogItem[];
@@ -106,6 +107,35 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [regCargo, setRegCargo] = useState('');
   const [regTarjeta, setRegTarjeta] = useState('');
   const [regPassword, setRegPassword] = useState('');
+
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState<string | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setRecoverySuccess(null);
+    const cleanEmail = recoveryEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg('Por favor ingresa tu correo institucional.');
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      await resetUserPassword(cleanEmail);
+      setRecoverySuccess(
+        `Se han enviado las instrucciones de restablecimiento de contraseña al correo institucional ${cleanEmail}. Revisa tu bandeja de entrada o spam.`
+      );
+    } catch (err: unknown) {
+      setRecoverySuccess(
+        `Solicitud de recuperación procesada para ${cleanEmail}. Si tu correo está registrado en la base de datos institucional, recibirás las instrucciones de recuperación.`
+      );
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,7 +533,60 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
             )}
 
-            {!isRegisterMode || !isAdmin ? (
+            {isRecoveryMode ? (
+              <form onSubmit={handleRecoverySubmit} className="space-y-4">
+                <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 text-xs text-teal-950 space-y-1">
+                  <div className="font-bold">Recuperación de Contraseña Institucional</div>
+                  <p>Ingresa tu correo institucional. Te enviaremos un enlace seguro para restablecer tu clave de acceso al sistema.</p>
+                </div>
+
+                {recoverySuccess && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                    <span>{recoverySuccess}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-[#334155] mb-1.5">
+                    Correo Institucional *
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      value={recoveryEmail}
+                      onChange={(e) => setRecoveryEmail(e.target.value)}
+                      placeholder="ejemplo@cem.edu.co"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#CBD5E1] text-xs sm:text-sm text-[#0F172A] focus:outline-none focus:border-[#0F766E]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRecoveryMode(false);
+                      setRecoverySuccess(null);
+                      setErrorMsg(null);
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition cursor-pointer"
+                  >
+                    ← Volver al Ingreso
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={recoveryLoading}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#0F766E] hover:bg-[#115E59] text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    {recoveryLoading ? 'Enviando...' : 'Enviar Instrucciones'}
+                  </button>
+                </div>
+              </form>
+            ) : !isRegisterMode || !isAdmin ? (
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-[#334155] mb-1.5">
@@ -546,6 +629,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       ) : (
                         <Eye className="w-4 h-4" />
                       )}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1.5">
+                    <span className="text-slate-400">Acceso seguro institucional</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecoveryMode(true);
+                        setErrorMsg(null);
+                        setRecoverySuccess(null);
+                        setRecoveryEmail(identifier.includes('@') ? identifier : '');
+                      }}
+                      className="text-[#0F766E] hover:underline font-bold cursor-pointer"
+                    >
+                      ¿Olvidaste tu contraseña?
                     </button>
                   </div>
                 </div>

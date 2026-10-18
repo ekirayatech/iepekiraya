@@ -50,6 +50,14 @@ import {
   TABLA_USUARIOS_PERFILES_INICIAL,
 } from './data/colombianLegislationAndSeed';
 import {
+  getEstudiantes,
+  getUsuarios,
+  saveEstudiante,
+  deleteEstudiante,
+  saveAjuste,
+  deleteAjuste,
+} from './services/firebaseDbService';
+import {
   createEkirayaSpreadsheet,
   extractSpreadsheetId,
   isAppsScriptUrl,
@@ -105,20 +113,23 @@ const DEFAULT_OAUTH_CLIENT_ID =
 
 export default function App() {
   // Hoja Maestra Usuarios_Perfiles sincronizada con Google Sheets
-  const [usuariosCatalog, setUsuariosCatalog] = useState<UsuarioPerfilCatalogItem[]>(
-    () => {
-      try {
-        const saved = localStorage.getItem(STORAGE_USUARIOS_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  const [usuariosCatalog, setUsuariosCatalog] = useState<UsuarioPerfilCatalogItem[]>([]);
+
+  useEffect(() => {
+    const fetchUsuarios = async () => {
+      const data = await getUsuarios();
+      if (data.length > 0) {
+        setUsuariosCatalog(data);
+      } else {
+        // Fallback to initial if empty
+        setUsuariosCatalog(TABLA_USUARIOS_PERFILES_INICIAL);
+        for (const user of TABLA_USUARIOS_PERFILES_INICIAL) {
+            await saveUsuario(user);
         }
-      } catch {
-        // fallback
       }
-      return TABLA_USUARIOS_PERFILES_INICIAL;
-    }
-  );
+    };
+    fetchUsuarios();
+  }, []);
 
   // Usuario autenticado actualmente mediante el Formulario de Login
   const [currentUser, setCurrentUser] = useState<UsuarioPerfilCatalogItem | null>(() => {
@@ -176,18 +187,20 @@ export default function App() {
   }, [currentUser, activeRole, activeView]);
 
   // Base de datos de Estudiantes PIAR y Banco de Ajustes
-  const [students, setStudents] = useState<StudentPIAR[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_STUDENTS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // fallback a datos semilla
-    }
-    return INITIAL_STUDENTS_PIAR;
-  });
+  const [students, setStudents] = useState<StudentPIAR[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      async (user) => {
+        if (user) {
+          const data = await getEstudiantes();
+          setStudents(data);
+        }
+      },
+      () => setStudents([])
+    );
+    return () => unsubscribe();
+  }, []);
 
   const [adjustmentBank, setAdjustmentBank] = useState<AjusteRazonableItem[]>(() => {
     try {
@@ -348,6 +361,7 @@ export default function App() {
 
   // Filtros del Directorio de Estudiantes
   const [searchStudent, setSearchStudent] = useState('');
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [filterCurso, setFilterCurso] = useState('TODOS');
   const [filterAnio, setFilterAnio] = useState('TODOS');
   const [filterTipo, setFilterTipo] = useState<'TODOS' | 'PIAR' | 'SUPERIOR'>('TODOS');
@@ -807,7 +821,8 @@ export default function App() {
   };
 
   // Guardar o Crear Estudiante PIAR
-  const handleSaveStudentPiar = (savedStudent: StudentPIAR) => {
+  const handleSaveStudentPiar = async (savedStudent: StudentPIAR) => {
+    await saveEstudiante(savedStudent);
     setStudents((prev) => {
       const exists = prev.some((s) => s.id === savedStudent.id);
       const next = exists
@@ -817,7 +832,7 @@ export default function App() {
       return next;
     });
     appendAuditLog(
-      `Guardado y cifrado AES-256 del expediente PIAR (${savedStudent.curso})`,
+      `Guardado en Firebase y cifrado AES-256 del expediente PIAR (${savedStudent.curso})`,
       savedStudent.nombresApellidos
     );
     setEditorModalState({
@@ -828,13 +843,14 @@ export default function App() {
     });
   };
 
-  const handleDeleteStudentPiar = (studentId: string, name: string) => {
+  const handleDeleteStudentPiar = async (studentId: string, name: string) => {
+    await deleteEstudiante(studentId);
     setStudents((prev) => {
       const next = prev.filter((s) => s.id !== studentId);
       persistAndBroadcast(next, adjustmentBank);
       return next;
     });
-    appendAuditLog('Eliminación de expediente PIAR', name);
+    appendAuditLog('Eliminación de expediente PIAR de Firebase', name);
   };
 
   // Guardar Firma Digital en Informe PDF de Auditoría
@@ -904,16 +920,18 @@ export default function App() {
   };
 
   // Gestión del Banco de Ajustes Razonables
-  const handleAddAdjustmentToBank = (newItem: AjusteRazonableItem) => {
+  const handleAddAdjustmentToBank = async (newItem: AjusteRazonableItem) => {
+    await saveAjuste(newItem);
     setAdjustmentBank((prev) => {
       const next = [newItem, ...prev];
       persistAndBroadcast(students, next);
       return next;
     });
-    appendAuditLog(`Nuevo ajuste agregado al Banco DUA: ${newItem.titulo}`);
+    appendAuditLog(`Nuevo ajuste agregado al Banco DUA en Firebase: ${newItem.titulo}`);
   };
 
-  const handleDeleteAdjustmentFromBank = (id: string) => {
+  const handleDeleteAdjustmentFromBank = async (id: string) => {
+    await deleteAjuste(id);
     setAdjustmentBank((prev) => {
       const next = prev.filter((i) => i.id !== id);
       persistAndBroadcast(students, next);
@@ -1614,6 +1632,18 @@ export default function App() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <button
+                    onClick={async () => {
+                      const selected = students.filter((s) => selectedStudents.has(s.id));
+                      if (selected.length === 0) return;
+                      await exportBatchPiarPdf(selected);
+                    }}
+                    disabled={selectedStudents.size === 0}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-xs sm:text-sm font-semibold cursor-pointer"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    Exportar Batch PDF ({selectedStudents.size})
+                  </button>
+                  <button
                     onClick={() =>
                       setEditorModalState({
                         isOpen: true,
@@ -1625,7 +1655,7 @@ export default function App() {
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#0F766E] hover:bg-[#115E59] text-white text-xs sm:text-sm font-semibold cursor-pointer"
                   >
                     <PlusCircle className="w-4 h-4" />
-                    Nuevo PIAR (Plantilla Decreto 1421)
+                    Nuevo PIAR
                   </button>
                   <button
                     onClick={() =>
@@ -1718,42 +1748,55 @@ export default function App() {
                     className="bg-white border border-[#E2E8F0] hover:border-[#94A3B8] rounded-xl p-5 space-y-4 shadow-2xs transition"
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 border-b border-[#E2E8F0] pb-4">
-                      <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono-code text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300">
-                            {st.codigoSimat}
-                          </span>
-                          <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-teal-50 text-teal-900 border border-teal-200">
-                            Curso: {st.curso} • Año Lectivo {st.anioLectivo}
-                          </span>
-                          <span
-                            className={`text-xs font-semibold px-2.5 py-0.5 rounded ${
-                              st.esDesempenoSuperior
-                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                : 'bg-indigo-50 text-indigo-900 border border-indigo-200'
-                            }`}
-                          >
-                            {st.categoriaSimat}
-                          </span>
-                        </div>
+                      <div className="flex gap-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudents.has(st.id)}
+                          onChange={(e) => {
+                            const next = new Set(selectedStudents);
+                            if (e.target.checked) next.add(st.id);
+                            else next.delete(st.id);
+                            setSelectedStudents(next);
+                          }}
+                          className="mt-1"
+                        />
+                        <div className="space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono-code text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300">
+                              {st.codigoSimat}
+                            </span>
+                            <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-teal-50 text-teal-900 border border-teal-200">
+                              Curso: {st.curso} • Año Lectivo {st.anioLectivo}
+                            </span>
+                            <span
+                              className={`text-xs font-semibold px-2.5 py-0.5 rounded ${
+                                st.esDesempenoSuperior
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : 'bg-indigo-50 text-indigo-900 border border-indigo-200'
+                              }`}
+                            >
+                              {st.categoriaSimat}
+                            </span>
+                          </div>
 
-                        <h3 className="text-lg sm:text-xl font-bold text-[#0F172A] font-serif-editorial">
-                          {st.nombresApellidos}
-                        </h3>
+                          <h3 className="text-lg sm:text-xl font-bold text-[#0F172A] font-serif-editorial">
+                            {st.nombresApellidos}
+                          </h3>
 
-                        <p className="text-xs sm:text-sm text-[#334155]">
-                          <strong className="text-[#0F172A]">Descripción Pedagógica:</strong>{' '}
-                          {st.descripcion}
-                        </p>
+                          <p className="text-xs sm:text-sm text-[#334155]">
+                            <strong className="text-[#0F172A]">Descripción Pedagógica:</strong>{' '}
+                            {st.descripcion}
+                          </p>
 
-                        <div className="text-xs text-[#475569] flex items-center gap-1.5 pt-0.5">
-                          <Lock className="w-3.5 h-3.5 text-teal-700 shrink-0" />
-                          <span>
-                            <strong>Diagnóstico (Ley 1581):</strong>{' '}
-                            {roleProfile.canEditClinicalDiagnosis
-                              ? st.diagnostico
-                              : 'Dato clínico protegido para rol docente — consultar caracterización pedagógica DUA.'}
-                          </span>
+                          <div className="text-xs text-[#475569] flex items-center gap-1.5 pt-0.5">
+                            <Lock className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                            <span>
+                              <strong>Diagnóstico (Ley 1581):</strong>{' '}
+                              {roleProfile.canEditClinicalDiagnosis
+                                ? st.diagnostico
+                                : 'Dato clínico protegido para rol docente — consultar caracterización pedagógica DUA.'}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
